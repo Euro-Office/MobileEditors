@@ -1,0 +1,24 @@
+[submodule "core"]
+	path = core
+	url = https://github.com/Euro-Office/core.git
+[submodule "sdkjs"]
+	path = sdkjs
+	url = https://github.com/Euro-Office/sdkjs.git
+[submodule "sdkjs-forms"]
+	path = sdkjs-forms
+	url = https://github.com/Euro-Office/sdkjs-forms.git
+[submodule "core-fonts"]
+	path = core-fonts
+	url = https://github.com/Euro-Office/core-fonts.git
+[submodule "editors-android"]
+	path = editors-android
+	url = https://github.com/Euro-Office/editors-android.git
+[submodule "documents-app-android"]
+        path = documents-app-android
+        url = https://github.com/Euro-Office/documents-app-android.git
+[submodule "dictionaries"]
+	path = dictionaries
+	url = https://github.com/Euro-Office/dictionaries.git
+[submodule "document-templates"]
+	path = document-templates
+	url = https://github.com/Euro-Office/document-templates.git
