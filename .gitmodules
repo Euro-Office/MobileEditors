@@ -14,8 +14,8 @@
 	path = editors-android
 	url = https://github.com/Euro-Office/editors-android.git
 [submodule "documents-app-android"]
-        path = documents-app-android
-        url = https://github.com/Euro-Office/documents-app-android.git
+	path = documents-app-android
+	url = https://github.com/Euro-Office/documents-app-android.git
 [submodule "dictionaries"]
 	path = dictionaries
 	url = https://github.com/Euro-Office/dictionaries.git
