@@ -32,6 +32,13 @@ target "android-toolchain" {
   tags       = ["${REGISTRY}/android-toolchain:${TAG}"]
 }
 
+target "core-android-builder" {
+  context    = "."
+  dockerfile = "android.Dockerfile"
+  target     = "core-android-builder"
+  tags       = ["${REGISTRY}/core-android-builder:${TAG}"]
+}
+
 target "apk" {
   context    = "."
   dockerfile = "android.Dockerfile"
@@ -44,4 +51,17 @@ target "apk" {
     GRADLE_TASK = GRADLE_TASK
   }
   output = ["type=local,dest=out"]
+}
+
+# Like apk, plus the libx2t converter with the core libraries from
+# scripts/core-android.sh (build/out/core-android/<abi>)
+target "apk-native" {
+  inherits = ["apk"]
+  target   = "apk-native"
+  contexts = {
+    app       = "../documents-app-android"
+    editors   = "../editors-android"
+    core      = "../core"
+    core-libs = "out/core-android"
+  }
 }

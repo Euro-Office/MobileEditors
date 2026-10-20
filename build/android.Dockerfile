@@ -3,8 +3,11 @@
 # Consumed by build/docker-bake.hcl; not meant to be built standalone.
 #
 # REQUIRED CONTEXTS (apk targets):
-# - app:     documents-app-android
-# - editors: editors-android
+# - app:       documents-app-android
+# - editors:   editors-android
+# apk-native additionally:
+# - core:      core sources (for the libx2t JNI wrapper)
+# - core-libs: build/out/core-android (see scripts/core-android.sh)
 # ==============================================================================
 
 #### TOOLCHAIN ####
@@ -40,9 +43,23 @@ FROM ubuntu:24.04 AS android-toolchain
             "platforms;${ANDROID_PLATFORM}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "ndk;${ANDROID_NDK}" \
-            "cmake;${ANDROID_CMAKE}" > /dev/null
+            "cmake;${ANDROID_CMAKE}" > /dev/null && \
+        chmod -R a+rX ${ANDROID_HOME}  # builds may run as a non-root user
 
     WORKDIR /src
+
+#### CORE BUILDER ####
+# Host tools for cross-compiling core and its 3rd-party deps
+# (core/Common/3dParty/build_3rdparty.py --target=android-*) with the NDK.
+FROM android-toolchain AS core-android-builder
+
+    RUN apt-get update && \
+        apt-get install -y --no-install-recommends \
+            build-essential clang lld ninja-build cmake pkg-config \
+            autoconf automake libtool perl patch patchelf python-is-python3 xz-utils bzip2 file && \
+        rm -rf /var/lib/apt/lists/*
+
+    ENV ANDROID_NDK_ROOT=${ANDROID_NDK_HOME}
 
 #### APK ####
 FROM android-toolchain AS apk-build
@@ -63,3 +80,24 @@ FROM android-toolchain AS apk-build
 
 FROM scratch AS apk
     COPY --from=apk-build /out/ /
+
+#### APK WITH NATIVE CORE ####
+FROM android-toolchain AS apk-native-build
+
+    ARG GRADLE_TASK=:appmanager:assembleDebug
+
+    COPY --from=app . /src/documents-app-android
+    COPY --from=editors . /src/editors-android
+    COPY --from=core . /src/core
+    COPY --from=core-libs . /src/build/out/core-android
+
+    # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
+    RUN --mount=type=cache,target=/root/.gradle \
+        --mount=type=cache,target=/root/.android \
+        cd /src/documents-app-android/app_manager && \
+        ./gradlew --no-daemon -PwithNativeCore=true ${GRADLE_TASK} && \
+        mkdir -p /out && \
+        find appmanager/build/outputs/apk -name '*.apk' -exec cp {} /out/ \;
+
+FROM scratch AS apk-native
+    COPY --from=apk-native-build /out/ /
