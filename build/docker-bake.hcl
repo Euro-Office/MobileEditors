@@ -39,6 +39,13 @@ target "core-android-builder" {
   tags       = ["${REGISTRY}/core-android-builder:${TAG}"]
 }
 
+target "emulator" {
+  context    = "."
+  dockerfile = "android.Dockerfile"
+  target     = "emulator"
+  tags       = ["${REGISTRY}/android-emulator:${TAG}"]
+}
+
 target "apk" {
   context    = "."
   dockerfile = "android.Dockerfile"
@@ -53,8 +60,8 @@ target "apk" {
   output = ["type=local,dest=out"]
 }
 
-# Like apk, plus the libx2t converter with the core libraries from
-# scripts/core-android.sh (build/out/core-android/<abi>)
+# Like apk, plus the native core: libx2t and the editor engine, with the core
+# libraries from scripts/core-android.sh and sdkjs from scripts/sdkjs.sh
 target "apk-native" {
   inherits = ["apk"]
   target   = "apk-native"
@@ -63,5 +70,7 @@ target "apk-native" {
     editors   = "../editors-android"
     core      = "../core"
     core-libs = "out/core-android"
+    sdkjs     = "out/sdkjs"
+    core-fonts = "../core-fonts"
   }
 }

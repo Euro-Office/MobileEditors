@@ -7,9 +7,10 @@ All builds run in Docker with `docker buildx bake`. Run the commands from this d
 | Target | What it does |
 |---|---|
 | `android-toolchain` | Ubuntu 24.04 with JDK 17, Android SDK (platform 36, build-tools 36.0.0), NDK 28.2.13676358 and CMake 3.22.1 |
-| `core-android-builder` | `android-toolchain` plus the host tools for cross-compiling core and its 3rd-party deps (clang, ninja, autotools, perl, patchelf) |
+| `core-android-builder` | `android-toolchain` plus the host tools for cross-compiling core and its 3rd-party deps (clang, ninja, autotools, perl) |
 | `apk` (default) | Builds `documents-app-android` with the `editors-android` modules and writes the APKs to `build/out/` |
-| `apk-native` | Like `apk`, plus the libx2t converter linked against the core libraries in `build/out/core-android/` |
+| `apk-native` | Like `apk`, plus the native core: libx2t and the editor engine, with the core libraries in `build/out/core-android/`, sdkjs from `build/out/sdkjs/` and fonts from `core-fonts` |
+| `emulator` | Headless Android emulator (Android 14, x86_64) for `scripts/emulator-test.sh`; needs `/dev/kvm` |
 
 ## Usage
 
@@ -33,13 +34,27 @@ for abi in arm64-v8a x86_64; do
   docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/src -w /src \
       ghcr.io/euro-office/core-android-builder build/scripts/core-android.sh $abi
 done
+docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
+    -v "$PWD":/src -w /src node:20 build/scripts/sdkjs.sh
 cd build && docker buildx bake --allow=fs.read=.. apk-native
 ```
 
 - Results go to `build/out/core-android/<abi>/` as stripped `lib*.so`. libx2t reads them from there (`PATH_LIB_BUILD_TOOLS` in `core/X2tConverter/build/Android/libx2t/gradle.properties`).
 - Checkouts, the CMake tree and unstripped libraries stay in `build/work/android-<arch>/`. A first build per ABI takes a while, mostly for V8; later builds are incremental.
-- `apk-native` needs both ABIs, because libx2t builds for `arm64-v8a` and `x86_64`.
-- With a debug APK from `apk-native`, the placeholder editor screen offers "Convert to PDF (x2t test)" to check the native core on a device.
+- `scripts/sdkjs.sh` builds sdkjs (with sdkjs-forms) and collects the files the editor engine loads in `build/out/sdkjs/`.
+- `apk-native` needs both ABIs, because libx2t and the engine build for `arm64-v8a` and `x86_64`.
+
+## Testing on an emulator
+
+`scripts/emulator-test.sh` boots the `emulator` image headless, installs an x86_64 APK, opens a document in the document editor and saves a screenshot and the log in `build/work/emulator/`:
+
+```sh
+docker buildx bake --allow=fs.read=.. emulator --load
+cd .. && docker run --rm --device /dev/kvm -v "$PWD":/src -w /src \
+    ghcr.io/euro-office/android-emulator build/scripts/emulator-test.sh build/out/<x86_64 apk> [document]
+```
+
+With `-e KEEP=1` the emulator keeps running, for further `docker exec <container> adb ...` commands.
 
 ## Notes
 

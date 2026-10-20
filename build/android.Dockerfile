@@ -8,6 +8,8 @@
 # apk-native additionally:
 # - core:      core sources (for the libx2t JNI wrapper)
 # - core-libs: build/out/core-android (see scripts/core-android.sh)
+# - sdkjs:     build/out/sdkjs, the editor engine's sdkjs (see scripts/sdkjs.sh)
+# - core-fonts: fonts bundled with the editor engine
 # ==============================================================================
 
 #### TOOLCHAIN ####
@@ -56,10 +58,29 @@ FROM android-toolchain AS core-android-builder
     RUN apt-get update && \
         apt-get install -y --no-install-recommends \
             build-essential clang lld ninja-build cmake pkg-config \
-            autoconf automake libtool perl patch patchelf python-is-python3 xz-utils bzip2 file && \
+            autoconf automake libtool perl patch python-is-python3 xz-utils bzip2 file && \
         rm -rf /var/lib/apt/lists/*
 
     ENV ANDROID_NDK_ROOT=${ANDROID_NDK_HOME}
+
+#### EMULATOR ####
+# Headless Android emulator for testing APKs (scripts/emulator-test.sh), needs /dev/kvm.
+# Google APIs images allow "adb root", to start the app's non-exported editor activities.
+FROM android-toolchain AS emulator
+
+    ARG SYSTEM_IMAGE="system-images;android-34;google_apis;x86_64"
+
+    RUN apt-get update && \
+        apt-get install -y --no-install-recommends libpulse0 libnss3 libxcomposite1 libxcursor1 \
+            libxdamage1 libxi6 libxtst6 libgl1 libdbus-1-3 && \
+        rm -rf /var/lib/apt/lists/*
+
+    RUN yes | sdkmanager --licenses > /dev/null && \
+        sdkmanager --install "emulator" "${SYSTEM_IMAGE}" > /dev/null && \
+        echo no | avdmanager create avd -n test -k "${SYSTEM_IMAGE}" -d pixel_6 && \
+        chmod -R a+rX ${ANDROID_HOME} /root && chmod a+rwx /root /root/.android
+
+    ENV PATH=${PATH}:${ANDROID_HOME}/emulator
 
 #### APK ####
 FROM android-toolchain AS apk-build
@@ -90,6 +111,8 @@ FROM android-toolchain AS apk-native-build
     COPY --from=editors . /src/editors-android
     COPY --from=core . /src/core
     COPY --from=core-libs . /src/build/out/core-android
+    COPY --from=sdkjs . /src/build/out/sdkjs
+    COPY --from=core-fonts . /src/core-fonts
 
     # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
     RUN --mount=type=cache,target=/root/.gradle \
