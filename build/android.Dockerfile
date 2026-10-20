@@ -53,7 +53,9 @@ FROM android-toolchain AS apk-build
     COPY --from=app . /src/documents-app-android
     COPY --from=editors . /src/editors-android
 
+    # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
     RUN --mount=type=cache,target=/root/.gradle \
+        --mount=type=cache,target=/root/.android \
         cd /src/documents-app-android/app_manager && \
         ./gradlew --no-daemon ${GRADLE_TASK} && \
         mkdir -p /out && \
