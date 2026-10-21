@@ -105,9 +105,7 @@ FROM scratch AS apk
     COPY --from=apk-build /out/ /
 
 #### APK WITH NATIVE CORE ####
-FROM android-toolchain AS apk-native-build
-
-    ARG GRADLE_TASK=:appmanager:assembleDebug
+FROM android-toolchain AS apk-native-sources
 
     COPY --from=app . /src/documents-app-android
     COPY --from=editors . /src/editors-android
@@ -116,6 +114,10 @@ FROM android-toolchain AS apk-native-build
     COPY --from=sdkjs . /src/build/out/sdkjs
     COPY --from=core-fonts . /src/core-fonts
     COPY --from=dictionaries . /src/build/out/dictionaries
+
+FROM apk-native-sources AS apk-native-build
+
+    ARG GRADLE_TASK=:appmanager:assembleDebug
 
     # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
     RUN --mount=type=cache,target=/root/.gradle \
@@ -127,3 +129,21 @@ FROM android-toolchain AS apk-native-build
 
 FROM scratch AS apk-native
     COPY --from=apk-native-build /out/ /
+
+#### UNIT TESTS OF THE EDITORS ####
+FROM apk-native-sources AS unit-tests-run
+
+    # The reports are kept also when tests fail; the result is in /out/result
+    RUN --mount=type=cache,target=/root/.gradle \
+        cd /src/documents-app-android/app_manager && \
+        mkdir -p /out && \
+        { ./gradlew --no-daemon -PwithNativeCore=true --continue \
+            :libeditors:testDebugUnitTest :libgeditors:testDebugUnitTest > /out/gradle.log 2>&1; \
+          echo $? > /out/result; } && \
+        for module in libeditors libgeditors; do \
+            cp -r /src/editors-android/$module/build/test-results /out/$module-results 2>/dev/null; \
+            cp -r /src/editors-android/$module/build/reports /out/$module-reports 2>/dev/null; \
+        done; true
+
+FROM scratch AS unit-tests
+    COPY --from=unit-tests-run /out/ /

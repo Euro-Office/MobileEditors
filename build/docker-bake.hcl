@@ -75,3 +75,11 @@ target "apk-native" {
     dictionaries = "out/dictionaries"
   }
 }
+
+# Unit tests of editors-android (libeditors, libgeditors): reports and the result (0 for success)
+# in out/unit-tests; the APK needs not be built
+target "unit-tests" {
+  inherits = ["apk-native"]
+  target   = "unit-tests"
+  output   = ["type=local,dest=out/unit-tests"]
+}
