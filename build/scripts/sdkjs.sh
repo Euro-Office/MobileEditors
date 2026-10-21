@@ -26,6 +26,12 @@ done
 cp -r "$DEPLOY/slide/themes" "$OUT_DIR/slide/"
 cp "$DEPLOY"/common/Native/*.js "$OUT_DIR/common/Native/"
 cp "$DEPLOY/common/libfont/engine/fonts_native.js" "$OUT_DIR/common/libfont/engine/"
+# SmartArt definitions the editors offer (read by the engine instead of loading them over the web)
+mkdir -p "$OUT_DIR/common/SmartArts/SmartArtDrawing" "$OUT_DIR/common/SmartArts/SmartArtData"
+cp "$ROOT/sdkjs/common/SmartArts/SmartArtDrawing/SmartArtDrawings.bin" "$OUT_DIR/common/SmartArts/SmartArtDrawing/"
+for name in Basic_Block_List Basic_Process Basic_Cycle Organization_Chart Basic_Venn Basic_Pyramid Vertical_Bullet_List Basic_Timeline; do
+    cp "$ROOT/sdkjs/common/SmartArts/SmartArtData/$name.bin" "$OUT_DIR/common/SmartArts/SmartArtData/"
+done
 # Not part of sdkjs' deploy, but loaded by DoctRenderer.config
 cp "$ROOT/sdkjs/vendor/xregexp-all-min.js" "$OUT_DIR/vendor/"
 
