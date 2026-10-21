@@ -72,5 +72,6 @@ target "apk-native" {
     core-libs = "out/core-android"
     sdkjs     = "out/sdkjs"
     core-fonts = "../core-fonts"
+    dictionaries = "out/dictionaries"
   }
 }

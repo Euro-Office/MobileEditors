@@ -36,12 +36,14 @@ for abi in arm64-v8a x86_64; do
 done
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
     -v "$PWD":/src -w /src node:20 build/scripts/sdkjs.sh
+build/scripts/dictionaries.sh
 cd build && docker buildx bake --allow=fs.read=.. apk-native
 ```
 
 - Results go to `build/out/core-android/<abi>/` as stripped `lib*.so`. libx2t reads them from there (`PATH_LIB_BUILD_TOOLS` in `core/X2tConverter/build/Android/libx2t/gradle.properties`).
 - Checkouts, the CMake tree and unstripped libraries stay in `build/work/android-<arch>/`. A first build per ABI takes a while, mostly for V8; later builds are incremental.
 - `scripts/sdkjs.sh` builds sdkjs (with sdkjs-forms) and collects the files the editor engine loads in `build/out/sdkjs/`.
+- `scripts/dictionaries.sh` collects the spell checking dictionaries in `build/out/dictionaries/`: English, which comes with the app, and `index.json` with the `dictionaries` commit this checkout pins. The app downloads other languages from that commit (raw.githubusercontent.com) when a document or the device language needs them. It needs git, so it runs outside Docker.
 - `apk-native` needs both ABIs, because libx2t and the engine build for `arm64-v8a` and `x86_64`.
 
 ## Testing on an emulator

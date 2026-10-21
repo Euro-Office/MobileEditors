@@ -10,6 +10,8 @@
 # - core-libs: build/out/core-android (see scripts/core-android.sh)
 # - sdkjs:     build/out/sdkjs, the editor engine's sdkjs (see scripts/sdkjs.sh)
 # - core-fonts: fonts bundled with the editor engine
+# - dictionaries: build/out/dictionaries, the bundled spell checking dictionary and the index of
+#   the others (see scripts/dictionaries.sh)
 # ==============================================================================
 
 #### TOOLCHAIN ####
@@ -113,6 +115,7 @@ FROM android-toolchain AS apk-native-build
     COPY --from=core-libs . /src/build/out/core-android
     COPY --from=sdkjs . /src/build/out/sdkjs
     COPY --from=core-fonts . /src/core-fonts
+    COPY --from=dictionaries . /src/build/out/dictionaries
 
     # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
     RUN --mount=type=cache,target=/root/.gradle \
