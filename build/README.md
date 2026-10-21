@@ -58,6 +58,16 @@ cd .. && docker run --rm --device /dev/kvm -v "$PWD":/src -w /src \
 
 With `-e KEEP=1` the emulator keeps running, for further `docker exec <container> adb ...` commands.
 
+## Tests
+
+| Tests | What | How |
+|---|---|---|
+| Engine | `editors-android/engine/tests`: scripts on document-templates' samples, run by the engine on the host (`eo-render`) | `scripts/engine-host.sh` in core's build image, then `editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package` in the same image with `LD_LIBRARY_PATH=/src/build/work/host/package` |
+| Unit | JVM tests of libeditors and libgeditors | `docker buildx bake --allow=fs.read=.. unit-tests`; reports and the result (0 for success) in `build/out/unit-tests/` |
+| UI | `build/tests/ui`: the app on an emulator opens, edits and saves documents; screen and saved file are checked | `scripts/ui-tests.sh <x86_64 apk>` in the emulator image (`BOOTED=1` to use a running emulator); screenshots and logs in `build/work/ui-tests/` |
+
+The engine's host build is described in `scripts/engine-host.sh`. It needs sdkjs from `scripts/sdkjs.sh`.
+
 ## Notes
 
 - Toolchain versions must match `documents-app-android/app_manager/gradle/libs.versions.toml` (`compileSdk`, `ndk`). Update the `ARG`s in `android.Dockerfile` when that file changes.
