@@ -59,6 +59,7 @@ tap_node() {
 }
 
 tap_desc() { tap_node "content-desc=\"$1\""; }
+tap_text() { tap_node "text=\"$1\""; }
 
 # A toolbar button, scrolling the toolbar step by step to it if needed
 tap_tool() {

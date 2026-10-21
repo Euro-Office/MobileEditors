@@ -32,6 +32,8 @@ cp "$ROOT/sdkjs/common/SmartArts/SmartArtDrawing/SmartArtDrawings.bin" "$OUT_DIR
 for name in Basic_Block_List Basic_Process Basic_Cycle Organization_Chart Basic_Venn Basic_Pyramid Vertical_Bullet_List Basic_Timeline; do
     cp "$ROOT/sdkjs/common/SmartArts/SmartArtData/$name.bin" "$OUT_DIR/common/SmartArts/SmartArtData/"
 done
+# Its third-party components, for the editors' licences page
+cp "$ROOT/sdkjs/3DPARTY.md" "$OUT_DIR/"
 # Not part of sdkjs' deploy, but loaded by DoctRenderer.config
 cp "$ROOT/sdkjs/vendor/xregexp-all-min.js" "$OUT_DIR/vendor/"
 

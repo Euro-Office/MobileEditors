@@ -58,7 +58,7 @@ docker buildx bake --allow=fs.read=.. apk                 # builds documents-app
 
 The APK is written to `build/out/`. See `build/README.md` for details and the planned native targets (`core-android`, `v8-android`, `sdkjs-native`).
 
-The app's release secrets (`*.gpg`: keystore, auth strings, Google services) are not needed for debug builds. Without `google-services.json`, the Firebase plugins are skipped.
+The app's release secrets (`*.gpg`: keystore, auth strings) are not needed for debug builds. The app uses no Firebase: crash reports stay on the device (`CrashLog` in libtoolkit) until the user sends them. Release builds can take the signing key from `EO_KEYSTORE_FILE`, `EO_KEYSTORE_PASSWORD`, `EO_KEY_ALIAS` and `EO_KEY_PASSWORD`.
 
 ## CI
 

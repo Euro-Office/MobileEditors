@@ -130,7 +130,7 @@ FROM apk-native-sources AS apk-native-build
 FROM scratch AS apk-native
     COPY --from=apk-native-build /out/ /
 
-#### UNIT TESTS OF THE EDITORS ####
+#### UNIT TESTS AND LINT OF THE EDITORS ####
 FROM apk-native-sources AS unit-tests-run
 
     # The reports are kept also when tests fail; the result is in /out/result
@@ -138,7 +138,8 @@ FROM apk-native-sources AS unit-tests-run
         cd /src/documents-app-android/app_manager && \
         mkdir -p /out && \
         { ./gradlew --no-daemon -PwithNativeCore=true --continue \
-            :libeditors:testDebugUnitTest :libgeditors:testDebugUnitTest > /out/gradle.log 2>&1; \
+            :libeditors:testDebugUnitTest :libgeditors:testDebugUnitTest \
+            :libeditors:lintDebug :libgeditors:lintDebug > /out/gradle.log 2>&1; \
           echo $? > /out/result; } && \
         for module in libeditors libgeditors; do \
             cp -r /src/editors-android/$module/build/test-results /out/$module-results 2>/dev/null; \
