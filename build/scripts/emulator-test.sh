@@ -33,7 +33,13 @@ APP_UID=$(adb shell stat -c %u "/data/data/$PACKAGE" | tr -d '\r')
 adb shell "mkdir -p $FILES_DIR && cp /data/local/tmp/$NAME $FILES_DIR/ && chown -R $APP_UID:$APP_UID $FILES_DIR && restorecon -R $FILES_DIR"
 
 adb logcat -c
-adb shell am start -n "$PACKAGE/lib.editors.gdocs.ui.activities.DocsActivity" -d "file://$FILES_DIR/$NAME" > /dev/null
+case "$NAME" in
+    *.pptx|*.ppsx|*.potx|*.odp|*.otp|*.ppt) ACTIVITY=lib.editors.gslides.ui.activities.SlidesActivity ;;
+    *.xlsx|*.xltx|*.ods|*.ots|*.csv|*.xls) ACTIVITY=lib.editors.gcells.ui.activities.CellsActivity ;;
+    *.pdf|*.xps|*.djvu) ACTIVITY=lib.editors.gbase.ui.activities.PdfActivity ;;
+    *) ACTIVITY=lib.editors.gdocs.ui.activities.DocsActivity ;;
+esac
+adb shell am start -n "$PACKAGE/$ACTIVITY" -d "file://$FILES_DIR/$NAME" > /dev/null
 
 # Wait until the first page is rendered (or the app gave up)
 elapsed=0

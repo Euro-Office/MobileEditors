@@ -17,8 +17,13 @@ BUILD_ROOT="$WORK_DIR" SDK_ADDONS="$ROOT/sdkjs-forms" SKIP_DEVELOP=1 npm run bui
 
 DEPLOY="$WORK_DIR/sdkjs"
 rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR/word" "$OUT_DIR/common/Native" "$OUT_DIR/common/libfont/engine" "$OUT_DIR/vendor"
-cp "$DEPLOY/word/sdk-all-min.js" "$DEPLOY/word/sdk-all.js" "$OUT_DIR/word/"
+mkdir -p "$OUT_DIR/common/Native" "$OUT_DIR/common/libfont/engine" "$OUT_DIR/vendor"
+for editor in word slide cell; do
+    mkdir -p "$OUT_DIR/$editor"
+    cp "$DEPLOY/$editor/sdk-all-min.js" "$DEPLOY/$editor/sdk-all.js" "$OUT_DIR/$editor/"
+done
+# Presentation themes (x2t's theme directory when saving)
+cp -r "$DEPLOY/slide/themes" "$OUT_DIR/slide/"
 cp "$DEPLOY"/common/Native/*.js "$OUT_DIR/common/Native/"
 cp "$DEPLOY/common/libfont/engine/fonts_native.js" "$OUT_DIR/common/libfont/engine/"
 # Not part of sdkjs' deploy, but loaded by DoctRenderer.config
