@@ -11,7 +11,8 @@
 #
 # Needs sdkjs from scripts/sdkjs.sh (build/work/sdkjs/sdkjs). Results: build/work/host/package (the
 # runtime directory and core's libraries) and build/work/host/engine/eo-render. Later runs are
-# incremental.
+# incremental. With CORE_PREBUILT=1, core's libraries and tools already in build/work/host are
+# used as they are (CI keeps them, but not core's much larger build tree).
 set -eu
 
 ROOT="${ROOT:-/src}"
@@ -19,14 +20,16 @@ WORK="$ROOT/build/work/host"
 PACKAGE="$WORK/package"
 
 # core
-if [ ! -f "$WORK/core/build.ninja" ]; then
+if [ "${CORE_PREBUILT:-0}" = "1" ]; then
+    echo "core: prebuilt in $PACKAGE"
+elif [ ! -f "$WORK/core/build.ninja" ]; then
     cmake -S "$ROOT/core" -B "$WORK/core" -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DVCPKG_MANIFEST_MODE=ON -DVCPKG_MANIFEST_DIR="$ROOT/core" \
         -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
         -DEO_CORE_3RD_PARTY_DIR="$WORK/3rd" \
         -DEO_CORE_OUTPUT_DIR="$PACKAGE" -DEO_CORE_TOOLS_DIR="$WORK/tools"
 fi
-cmake --build "$WORK/core" --target docbuilder x2t allfontsgen
+[ "${CORE_PREBUILT:-0}" = "1" ] || cmake --build "$WORK/core" --target docbuilder x2t allfontsgen
 
 # Runtime: sdkjs, DoctRenderer.config and the font index of core-fonts
 SDKJS="$ROOT/build/work/sdkjs/sdkjs"

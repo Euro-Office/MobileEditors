@@ -60,6 +60,10 @@ The APK is written to `build/out/`. See `build/README.md` for details and the pl
 
 The app's release secrets (`*.gpg`: keystore, auth strings, Google services) are not needed for debug builds. Without `google-services.json`, the Firebase plugins are skipped.
 
+## CI
+
+`.github/workflows/ci.yml` builds the APK and runs the engine, unit and UI tests (see `build/README.md`). Core for Android, sdkjs and the host core are cached by the commits of their submodules, so a change of `core` rebuilds core for Android (hours, mostly V8). The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
+
 ## Commits
 
 - Commit messages must follow the Conventional Commits v1.0.0 specification — e.g. feat(engine): render document tiles, fix(app): handle missing snapshot library.

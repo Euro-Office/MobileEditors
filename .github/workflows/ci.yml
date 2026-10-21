@@ -1,0 +1,232 @@
+# Builds the app with the editors and runs the editors' tests: engine (host), unit (JVM) and UI
+# (emulator). Core for Android, sdkjs and the host engine are cached by the commits of their
+# submodules, so most runs only build editors-android and the app.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  versions:
+    name: Submodule commits
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.commits.outputs.core }}
+      sdkjs: ${{ steps.commits.outputs.sdkjs }}
+    steps:
+      - uses: actions/checkout@v4
+      # Cache keys: the pinned submodule commits and the scripts that build them
+      - id: commits
+        run: |
+          echo "core=$(git rev-parse HEAD:core)-${{ hashFiles('build/scripts/core-android.sh', 'build/android.Dockerfile') }}" >> "$GITHUB_OUTPUT"
+          echo "sdkjs=$(git rev-parse HEAD:sdkjs)-$(git rev-parse HEAD:sdkjs-forms)-${{ hashFiles('build/scripts/sdkjs.sh') }}" >> "$GITHUB_OUTPUT"
+
+  core-android:
+    name: Core (${{ matrix.abi }})
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: build/out/core-android/${{ matrix.abi }}
+          key: core-android-${{ matrix.abi }}-${{ needs.versions.outputs.core }}
+          lookup-only: true
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Free disk space (the build needs about 20 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker image prune -af
+          df -h /
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: docker/setup-buildx-action@v3
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Build core
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. core-android-builder --load \
+              --set core-android-builder.cache-from=type=gha,scope=core-android-builder \
+              --set core-android-builder.cache-to=type=gha,mode=max,scope=core-android-builder
+          cd .. && docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/src -w /src \
+              ghcr.io/euro-office/core-android-builder build/scripts/core-android.sh ${{ matrix.abi }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/out/core-android/${{ matrix.abi }}
+          key: core-android-${{ matrix.abi }}-${{ needs.versions.outputs.core }}
+
+  sdkjs:
+    name: sdkjs
+    needs: versions
+    runs-on: ubuntu-latest
+    steps:
+      - id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/out/sdkjs
+            build/work/sdkjs/sdkjs
+          key: sdkjs-${{ needs.versions.outputs.sdkjs }}
+          lookup-only: true
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Build sdkjs
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
+              -v "$PWD":/src -w /src node:20 build/scripts/sdkjs.sh
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build/out/sdkjs
+            build/work/sdkjs/sdkjs
+          key: sdkjs-${{ needs.versions.outputs.sdkjs }}
+
+  apk:
+    name: APK and unit tests
+    needs: [versions, core-android, sdkjs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Restore core (arm64-v8a)
+        uses: actions/cache/restore@v4
+        with:
+          path: build/out/core-android/arm64-v8a
+          key: core-android-arm64-v8a-${{ needs.versions.outputs.core }}
+          fail-on-cache-miss: true
+      - name: Restore core (x86_64)
+        uses: actions/cache/restore@v4
+        with:
+          path: build/out/core-android/x86_64
+          key: core-android-x86_64-${{ needs.versions.outputs.core }}
+          fail-on-cache-miss: true
+      - name: Restore sdkjs
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/out/sdkjs
+            build/work/sdkjs/sdkjs
+          key: sdkjs-${{ needs.versions.outputs.sdkjs }}
+          fail-on-cache-miss: true
+      - name: Dictionaries
+        run: build/scripts/dictionaries.sh
+      - uses: docker/setup-buildx-action@v3
+      - name: Unit tests
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. unit-tests \
+              --set '*.cache-from=type=gha,scope=android' --set '*.cache-to=type=gha,mode=max,scope=android'
+          tail -30 out/unit-tests/gradle.log
+          test "$(cat out/unit-tests/result)" = 0
+      - name: APK
+        working-directory: build
+        run: docker buildx bake --allow=fs.read=.. apk-native --set '*.cache-from=type=gha,scope=android'
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests
+          path: build/out/unit-tests
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: |
+            build/out/*arm64-v8a*.apk
+            build/out/*x86_64*.apk
+
+  engine-tests:
+    name: Engine tests
+    needs: [versions, sdkjs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Restore sdkjs
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/out/sdkjs
+            build/work/sdkjs/sdkjs
+          key: sdkjs-${{ needs.versions.outputs.sdkjs }}
+          fail-on-cache-miss: true
+      # core for the host: its libraries and tools, by core's commit (its build tree is too large)
+      - id: core-host
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/work/host/package
+            build/work/host/tools
+          key: core-host-${{ needs.versions.outputs.core }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Core build image
+        run: |
+          docker buildx build -f core/.docker/core.bake.Dockerfile --target core-base \
+              --build-arg PRODUCT=desktop --build-arg BUILD_ROOT=/package -t eo-core-base:desktop --load \
+              --cache-from type=gha,scope=core-base --cache-to type=gha,mode=max,scope=core-base core
+      - name: Engine for the host
+        run: |
+          docker run --rm -v "$PWD":/src -w /src -e CORE_PREBUILT=${{ steps.core-host.outputs.cache-hit == 'true' && '1' || '0' }} \
+              eo-core-base:desktop build/scripts/engine-host.sh
+      - name: Engine tests
+        run: |
+          docker run --rm -v "$PWD":/src -w /src -e LD_LIBRARY_PATH=/src/build/work/host/package \
+              eo-core-base:desktop editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package
+
+  ui-tests:
+    name: UI tests
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: build/out
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: docker/setup-buildx-action@v3
+      - name: Emulator image
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. emulator --load \
+              --set emulator.cache-from=type=gha,scope=emulator --set emulator.cache-to=type=gha,mode=max,scope=emulator
+      - name: UI tests
+        run: |
+          docker run --rm --device /dev/kvm -v "$PWD":/src -w /src ghcr.io/euro-office/android-emulator \
+              build/scripts/ui-tests.sh "$(find build/out -name "*x86_64*.apk" | head -1)"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-tests
+          path: build/work/ui-tests
+          if-no-files-found: ignore
