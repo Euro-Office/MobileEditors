@@ -61,10 +61,10 @@ tap_node() {
 tap_desc() { tap_node "content-desc=\"$1\""; }
 tap_text() { tap_node "text=\"$1\""; }
 
-# A toolbar button, scrolling the toolbar step by step to it if needed
+# A button of the bottom toolbar, scrolling the toolbar step by step to it if needed
 tap_tool() {
     tool=$1
-    set -- $(center 'content-desc="Find"')
+    set -- $(center 'id/editorToolbar"')
     for _ in 1 2 3 4 5 6; do
         [ -n "$(center "content-desc=\"$tool\"")" ] && break
         [ $# -eq 2 ] && adb shell input swipe 700 "$2" 400 "$2" 400
@@ -87,12 +87,14 @@ editor_shown() {
     adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | grep -q "lib.editors"
 }
 
-# Leaves the editor (back, maybe after closing the keyboard), which saves the document; then
+# Leaves the editor (back, maybe after closing the keyboard), saving the document; then
 # copies it to $OUT/<name>
 close_and_pull() {
     for _ in 1 2 3; do
         adb shell input keyevent BACK
-        sleep 3
+        sleep 2
+        # Leaving asks whether to save the changes
+        [ -n "$(center 'text="Save changes?"')" ] && tap_text "Save" && sleep 3
         editor_shown || break
     done
     editor_shown && fail "the editor didn't close"
