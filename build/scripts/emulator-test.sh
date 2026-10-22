@@ -11,7 +11,7 @@ APK="$1"
 DOCUMENT="${2:-/src/document-templates/sample/sample.docx}"
 WAIT_SECONDS="${WAIT_SECONDS:-90}"
 OUT=/src/build/work/emulator
-PACKAGE=com.onlyoffice.documents
+PACKAGE=eu.eurooffice.documents
 FILES_DIR=/data/data/$PACKAGE/files
 mkdir -p "$OUT"
 

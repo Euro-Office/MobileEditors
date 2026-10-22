@@ -2,7 +2,7 @@
 # on the editor through adb and checks the screen (uiautomator) and the saved file; "fail" marks
 # it failed. Screenshots go to $OUT.
 
-PACKAGE=com.onlyoffice.documents
+PACKAGE=eu.eurooffice.documents
 FILES_DIR=/data/data/$PACKAGE/files
 
 fail() {
