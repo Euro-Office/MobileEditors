@@ -204,7 +204,8 @@ jobs:
           docker run --rm -v "$PWD":/src -w /src -e LD_LIBRARY_PATH=/src/build/work/host/package \
               eo-core-base:desktop editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package
       # Co-editing: the engine as the app runs it and a web editor (Playwright) edit the sample
-      # files together; a small storage (tools/coedit/storage.mjs) stands in for Nextcloud
+      # files together, and a PDF the engine tests saved; a small storage (tools/coedit/storage.mjs)
+      # stands in for Nextcloud
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -232,7 +233,8 @@ jobs:
           export RUN_ENGINE
           VERBOSE=1 node editors-android/engine/tools/coedit/check.mjs --document-server http://localhost \
               --secret "$DOCUMENT_SERVER_SECRET" --storage-url http://localhost:8095 \
-              document-templates/sample/sample.docx document-templates/sample/sample.pptx document-templates/sample/sample.xlsx
+              document-templates/sample/sample.docx document-templates/sample/sample.pptx document-templates/sample/sample.xlsx \
+              build/work/engine-tests/docs-pdf.pdf
       - if: failure()
         run: docker logs documentserver 2>&1 | tail -200
       - if: always()

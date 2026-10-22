@@ -44,6 +44,9 @@ cat > "$PACKAGE/DoctRenderer.config" <<CONFIG
 <sdkjs>./sdkjs</sdkjs>
 </Settings>
 CONFIG
+# The blank document sdkjs' PDF editor starts from (Document::OpenPdf)
+mkdir -p "$PACKAGE/empty"
+cp "$ROOT/document-templates/new/en-US/new.docx" "$PACKAGE/empty/new.docx"
 if [ ! -f "$PACKAGE/fonts/AllFonts.js" ]; then
     mkdir -p "$PACKAGE/fonts"
     LD_LIBRARY_PATH="$PACKAGE" "$WORK/tools/allfontsgen" --input="$ROOT/core-fonts" \

@@ -26,6 +26,9 @@ done
 cp -r "$DEPLOY/slide/themes" "$OUT_DIR/slide/"
 cp "$DEPLOY"/common/Native/*.js "$OUT_DIR/common/Native/"
 cp "$DEPLOY/common/libfont/engine/fonts_native.js" "$OUT_DIR/common/libfont/engine/"
+# The PDF editor reads PDFs through core's reader with it (editors-android/engine/src/pdf.js)
+mkdir -p "$OUT_DIR/pdf/src/engine"
+cp "$DEPLOY/pdf/src/engine/drawingfile_native.js" "$OUT_DIR/pdf/src/engine/"
 # SmartArt definitions the editors offer (read by the engine instead of loading them over the web)
 mkdir -p "$OUT_DIR/common/SmartArts/SmartArtDrawing" "$OUT_DIR/common/SmartArts/SmartArtData"
 cp "$ROOT/sdkjs/common/SmartArts/SmartArtDrawing/SmartArtDrawings.bin" "$OUT_DIR/common/SmartArts/SmartArtDrawing/"

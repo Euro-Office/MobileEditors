@@ -12,6 +12,7 @@
 # - core-fonts: fonts bundled with the editor engine
 # - dictionaries: build/out/dictionaries, the bundled spell checking dictionary and the index of
 #   the others (see scripts/dictionaries.sh)
+# - document-templates: its blank document, which the engine's PDF editor starts from
 # ==============================================================================
 
 #### TOOLCHAIN ####
@@ -114,6 +115,7 @@ FROM android-toolchain AS apk-native-sources
     COPY --from=sdkjs . /src/build/out/sdkjs
     COPY --from=core-fonts . /src/core-fonts
     COPY --from=dictionaries . /src/build/out/dictionaries
+    COPY --from=document-templates new/en-US/new.docx /src/document-templates/new/en-US/new.docx
 
 FROM apk-native-sources AS apk-native-build
 

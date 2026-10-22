@@ -73,6 +73,7 @@ target "apk-native" {
     sdkjs     = "out/sdkjs"
     core-fonts = "../core-fonts"
     dictionaries = "out/dictionaries"
+    document-templates = "../document-templates"
   }
 }
 
