@@ -1,5 +1,5 @@
-# Builds the app with the editors and runs the editors' tests: engine (host), unit (JVM) and UI
-# (emulator). Core for Android, sdkjs and the host engine are cached by the commits of their
+# Builds the app with the editors and runs the editors' tests: engine (host), co-editing (the
+# host engine and a web editor through a Document Server), unit (JVM) and UI (emulator). Core for Android, sdkjs and the host engine are cached by the commits of their
 # submodules, so most runs only build editors-android and the app.
 name: CI
 
@@ -158,9 +158,17 @@ jobs:
             build/out/*x86_64*.apk
 
   engine-tests:
-    name: Engine tests
+    name: Engine and co-editing tests
     needs: [versions, sdkjs]
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # The Document Server for co-editing (its development image follows DocumentServer's main)
+      DOCUMENT_SERVER_IMAGE: ghcr.io/euro-office/documentserver:latest-dev
+      DOCUMENT_SERVER_SECRET: ci-co-editing-secret
     steps:
       - uses: actions/checkout@v4
         with:
@@ -195,6 +203,44 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/src -w /src -e LD_LIBRARY_PATH=/src/build/work/host/package \
               eo-core-base:desktop editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package
+      # Co-editing: the engine as the app runs it and a web editor (Playwright) edit the sample
+      # files together; a small storage (tools/coedit/storage.mjs) stands in for Nextcloud
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Document Server
+        run: |
+          docker run -d --name documentserver --network host -e JWT_SECRET="$DOCUMENT_SERVER_SECRET" \
+              -e ALLOW_PRIVATE_IP_ADDRESS=true -e USE_UNAUTHORIZED_STORAGE=true "$DOCUMENT_SERVER_IMAGE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Co-editing tools
+        working-directory: editors-android/engine/tools/coedit
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Co-editing tests
+        run: |
+          for _ in $(seq 1 60); do
+              [ "$(curl -sf http://localhost/healthcheck)" = "true" ] && break
+              sleep 5
+          done
+          RUN_ENGINE="docker run -i --rm --network host --user $(id -u):$(id -g) -v $PWD:/src -w /src -e LD_LIBRARY_PATH=/src/build/work/host/package -e EO_REPL=1 eo-core-base:desktop build/work/host/engine/eo-render build/work/host/package {doc} build/work/coedit/engine 1"
+          export RUN_ENGINE
+          VERBOSE=1 node editors-android/engine/tools/coedit/check.mjs --document-server http://localhost \
+              --secret "$DOCUMENT_SERVER_SECRET" --storage-url http://localhost:8095 \
+              document-templates/sample/sample.docx document-templates/sample/sample.pptx document-templates/sample/sample.xlsx
+      - if: failure()
+        run: docker logs documentserver 2>&1 | tail -200
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: co-editing
+          path: build/work/coedit/storage
+          if-no-files-found: ignore
 
   ui-tests:
     name: UI tests

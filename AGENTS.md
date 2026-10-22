@@ -62,7 +62,7 @@ The app's release secrets (`*.gpg`: keystore, auth strings) are not needed for d
 
 ## CI
 
-`.github/workflows/ci.yml` builds the APK and runs the engine, unit and UI tests (see `build/README.md`). Core for Android, sdkjs and the host core are cached by the commits of their submodules, so a change of `core` rebuilds core for Android (hours, mostly V8). The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
+`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. Core for Android, sdkjs and the host core are cached by the commits of their submodules, so a change of `core` rebuilds core for Android (hours, mostly V8). The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
 
 ## Commits
 

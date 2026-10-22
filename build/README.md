@@ -63,6 +63,7 @@ With `-e KEEP=1` the emulator keeps running, for further `docker exec <container
 | Tests | What | How |
 |---|---|---|
 | Engine | `editors-android/engine/tests`: scripts on document-templates' samples, run by the engine on the host (`eo-render`) | `scripts/engine-host.sh` in core's build image, then `editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package` in the same image with `LD_LIBRARY_PATH=/src/build/work/host/package` |
+| Co-editing | `editors-android/engine/tools/coedit/check.mjs`: the host engine (as the app runs it) and a web editor edit the samples together through a Document Server, down to the saved document | A Document Server (CI: `ghcr.io/euro-office/documentserver:latest-dev`), then `check.mjs` with `RUN_ENGINE`, see editors-android/engine/README.md |
 | Unit | JVM tests of libeditors and libgeditors | `docker buildx bake --allow=fs.read=.. unit-tests`; reports and the result (0 for success) in `build/out/unit-tests/` |
 | UI | `build/tests/ui`: the app on an emulator opens, edits and saves documents; screen and saved file are checked | `scripts/ui-tests.sh <x86_64 apk>` in the emulator image (`BOOTED=1` to use a running emulator); screenshots and logs in `build/work/ui-tests/` |
 
