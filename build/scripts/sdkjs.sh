@@ -29,12 +29,9 @@ cp "$DEPLOY/common/libfont/engine/fonts_native.js" "$OUT_DIR/common/libfont/engi
 # The PDF editor reads PDFs through core's reader with it (editors-engine/src/pdf.js)
 mkdir -p "$OUT_DIR/pdf/src/engine"
 cp "$DEPLOY/pdf/src/engine/drawingfile_native.js" "$OUT_DIR/pdf/src/engine/"
-# SmartArt definitions the editors offer (read by the engine instead of loading them over the web)
-mkdir -p "$OUT_DIR/common/SmartArts/SmartArtDrawing" "$OUT_DIR/common/SmartArts/SmartArtData"
-cp "$ROOT/sdkjs/common/SmartArts/SmartArtDrawing/SmartArtDrawings.bin" "$OUT_DIR/common/SmartArts/SmartArtDrawing/"
-for name in Basic_Block_List Basic_Process Basic_Cycle Organization_Chart Basic_Venn Basic_Pyramid Vertical_Bullet_List Basic_Timeline; do
-    cp "$ROOT/sdkjs/common/SmartArts/SmartArtData/$name.bin" "$OUT_DIR/common/SmartArts/SmartArtData/"
-done
+# SmartArt definitions, all of which the editors offer (read by the engine instead of loading them over the web)
+mkdir -p "$OUT_DIR/common/SmartArts"
+cp -r "$ROOT/sdkjs/common/SmartArts/SmartArtDrawing" "$ROOT/sdkjs/common/SmartArts/SmartArtData" "$OUT_DIR/common/SmartArts/"
 # Its third-party components, for the editors' licences page
 cp "$ROOT/sdkjs/3DPARTY.md" "$OUT_DIR/"
 # Not part of sdkjs' deploy, but loaded by DoctRenderer.config
