@@ -32,6 +32,9 @@ cp "$DEPLOY/pdf/src/engine/drawingfile_native.js" "$OUT_DIR/pdf/src/engine/"
 # SmartArt definitions, all of which the editors offer (read by the engine instead of loading them over the web)
 mkdir -p "$OUT_DIR/common/SmartArts"
 cp -r "$ROOT/sdkjs/common/SmartArts/SmartArtDrawing" "$ROOT/sdkjs/common/SmartArts/SmartArtData" "$OUT_DIR/common/SmartArts/"
+# Chart styles, which the web editor loads separately (read by the engine when a chart is selected)
+mkdir -p "$OUT_DIR/common/Charts"
+cp "$ROOT/sdkjs/common/Charts/ChartStyles.js" "$OUT_DIR/common/Charts/"
 # Its third-party components, for the editors' licences page
 cp "$ROOT/sdkjs/3DPARTY.md" "$OUT_DIR/"
 # Not part of sdkjs' deploy, but loaded by DoctRenderer.config
