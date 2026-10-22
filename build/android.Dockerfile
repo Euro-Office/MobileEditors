@@ -1,75 +1,80 @@
 # ==============================================================================
-# Android build image and APK build for MobileEditors.
-# Consumed by build/docker-bake.hcl; not meant to be built standalone.
+# MobileEditors' own images, consumed by build/docker-bake.hcl (not meant to be
+# built standalone). The repositories build themselves with their module
+# Dockerfiles (core, sdkjs, editors-engine, documents-app-android); this file
+# has what they share and what tests the assembled app.
 #
-# REQUIRED CONTEXTS (apk targets):
-# - app:       documents-app-android
-# - editors:   editors-android
-# apk-native additionally:
-# - engine:    editors-engine, the editor engine libeditors' JNI binding builds
-# - core:      core sources (for the libx2t JNI wrapper)
-# - core-libs: build/out/core-android (see scripts/core-android.sh)
-# - sdkjs:     build/out/sdkjs, the editor engine's sdkjs (see scripts/sdkjs.sh)
-# - core-fonts: fonts bundled with the editor engine
-# - dictionaries: build/out/dictionaries, the bundled spell checking dictionary and the index of
-#   the others (see scripts/dictionaries.sh)
-# - document-templates: its blank document, which the engine's PDF editor starts from
+# - android-ndk: the NDK and the host tools for native builds; core
+#   (core-android) and the app (its JNI code, android-toolchain) build on it,
+#   so all native code has the same NDK and C++ runtime
+# - dictionaries: the bundled spell checking dictionary and the index of the
+#   others (needs DICTIONARIES_COMMIT, the commit MobileEditors pins)
+# - emulator: a headless Android emulator for the UI tests (needs the app's
+#   android-toolchain as context)
 # ==============================================================================
 
-#### TOOLCHAIN ####
-FROM ubuntu:24.04 AS android-toolchain
+#### NDK ####
+FROM ubuntu:24.04 AS android-ndk
 
-    ARG CMDLINE_TOOLS_VERSION=16111833
-    # Keep in sync with documents-app-android/app_manager/gradle/libs.versions.toml
-    ARG ANDROID_PLATFORM=android-36
-    ARG ANDROID_BUILD_TOOLS=36.0.0
-    ARG ANDROID_NDK=28.2.13676358
-    ARG ANDROID_CMAKE=3.22.1
+    # Keep in sync with documents-app-android/app_manager/gradle/libs.versions.toml (ndk)
+    ARG ANDROID_NDK_RELEASE=r28c
+    ARG ANDROID_NDK_VERSION=28.2.13676358
 
-    ENV ANDROID_HOME=/opt/android-sdk
-    ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
-    ENV ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK}
-    ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
-
+    # Host tools of core's third-party builds (core/Common/3dParty/build_3rdparty.py)
     RUN apt-get update && \
         apt-get install -y --no-install-recommends \
-            ca-certificates curl unzip git python3 openjdk-17-jdk-headless && \
-        rm -rf /var/lib/apt/lists/*
-
-    RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
-        curl -fsSL -o /tmp/cmdline-tools.zip \
-            https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip && \
-        unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_HOME}/cmdline-tools && \
-        mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest && \
-        rm /tmp/cmdline-tools.zip
-
-    RUN yes | sdkmanager --licenses > /dev/null && \
-        sdkmanager --install \
-            "platform-tools" \
-            "platforms;${ANDROID_PLATFORM}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "ndk;${ANDROID_NDK}" \
-            "cmake;${ANDROID_CMAKE}" > /dev/null && \
-        chmod -R a+rX ${ANDROID_HOME}  # builds may run as a non-root user
-
-    WORKDIR /src
-
-#### CORE BUILDER ####
-# Host tools for cross-compiling core and its 3rd-party deps
-# (core/Common/3dParty/build_3rdparty.py --target=android-*) with the NDK.
-FROM android-toolchain AS core-android-builder
-
-    RUN apt-get update && \
-        apt-get install -y --no-install-recommends \
+            ca-certificates curl unzip git python3 python-is-python3 \
             build-essential clang lld ninja-build cmake pkg-config \
-            autoconf automake libtool perl patch python-is-python3 xz-utils bzip2 file && \
+            autoconf automake libtool perl patch xz-utils bzip2 file && \
         rm -rf /var/lib/apt/lists/*
 
-    ENV ANDROID_NDK_ROOT=${ANDROID_NDK_HOME}
+    RUN curl -fsSL -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_RELEASE}-linux.zip && \
+        unzip -q /tmp/ndk.zip -d /opt && \
+        mv /opt/android-ndk-${ANDROID_NDK_RELEASE} /opt/android-ndk && \
+        rm /tmp/ndk.zip && \
+        grep -q "Pkg.Revision = ${ANDROID_NDK_VERSION}" /opt/android-ndk/source.properties
+
+    ENV ANDROID_NDK_ROOT=/opt/android-ndk
+    ENV ANDROID_NDK_VERSION=${ANDROID_NDK_VERSION}
+
+#### DICTIONARIES ####
+# The English dictionary, which comes with the app, and index.json: the dictionaries
+# commit, where to download the others from at that commit and each one's languages (LCIDs)
+FROM ubuntu:24.04 AS dictionaries-build
+
+    ARG DICTIONARIES_COMMIT
+
+    COPY dictionaries /dictionaries
+    COPY .gitmodules /.gitmodules
+
+    RUN <<EOF
+        set -e
+        [ -n "${DICTIONARIES_COMMIT}" ] || { echo "Set DICTIONARIES_COMMIT (git rev-parse HEAD:dictionaries)" >&2; exit 1; }
+        REPOSITORY=$(sed -n '/submodule "dictionaries"/,/url/s#.*url = ##p' /.gitmodules)
+        URL=$(echo "$REPOSITORY" | sed 's#\.git$##; s#^git@github.com:#https://github.com/#; s#^https://github.com/#https://raw.githubusercontent.com/#')
+        mkdir -p /out/en_US
+        cp /dictionaries/en_US/en_US.aff /dictionaries/en_US/en_US.dic /out/en_US/
+        {
+            printf '{"commit": "%s", "url": "%s", "languages": {' "${DICTIONARIES_COMMIT}" "$URL"
+            first=1
+            for dir in /dictionaries/*/; do
+                name=$(basename "$dir")
+                [ -f "$dir/$name.dic" ] && [ -f "$dir/$name.json" ] || continue
+                codes=$(sed 's/.*\[\(.*\)\].*/\1/' "$dir/$name.json" | tr -d ' \n\r')
+                [ $first -eq 1 ] || printf ', '
+                printf '"%s": [%s]' "$name" "$codes"
+                first=0
+            done
+            printf '}}\n'
+        } > /out/index.json
+EOF
+
+FROM scratch AS dictionaries
+    COPY --from=dictionaries-build /out/ /
 
 #### EMULATOR ####
-# Headless Android emulator for testing APKs (scripts/emulator-test.sh), needs /dev/kvm.
-# Google APIs images allow "adb root", to start the app's non-exported editor activities.
+# Headless Android emulator for testing APKs (scripts/emulator-test.sh, ui-tests.sh), needs
+# /dev/kvm. Google APIs images allow "adb root", to start the app's non-exported editor activities.
 FROM android-toolchain AS emulator
 
     ARG SYSTEM_IMAGE="system-images;android-34;google_apis;x86_64"
@@ -85,70 +90,3 @@ FROM android-toolchain AS emulator
         chmod -R a+rX ${ANDROID_HOME} /root && chmod a+rwx /root /root/.android
 
     ENV PATH=${PATH}:${ANDROID_HOME}/emulator
-
-#### APK ####
-FROM android-toolchain AS apk-build
-
-    ARG GRADLE_TASK=:appmanager:assembleDebug
-
-    # Same relative layout as the MobileEditors checkout, so settings.gradle.kts resolves ../../editors-android
-    COPY --from=app . /src/documents-app-android
-    COPY --from=editors . /src/editors-android
-
-    # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
-    RUN --mount=type=cache,target=/root/.gradle \
-        --mount=type=cache,target=/root/.android \
-        cd /src/documents-app-android/app_manager && \
-        ./gradlew --no-daemon ${GRADLE_TASK} && \
-        mkdir -p /out && \
-        find appmanager/build/outputs/apk -name '*.apk' -exec cp {} /out/ \;
-
-FROM scratch AS apk
-    COPY --from=apk-build /out/ /
-
-#### APK WITH NATIVE CORE ####
-FROM android-toolchain AS apk-native-sources
-
-    COPY --from=app . /src/documents-app-android
-    COPY --from=editors . /src/editors-android
-    COPY --from=engine . /src/editors-engine
-    COPY --from=core . /src/core
-    COPY --from=core-libs . /src/build/out/core-android
-    COPY --from=sdkjs . /src/build/out/sdkjs
-    COPY --from=core-fonts . /src/core-fonts
-    COPY --from=dictionaries . /src/build/out/dictionaries
-    COPY --from=document-templates new/en-US/new.docx /src/document-templates/new/en-US/new.docx
-
-FROM apk-native-sources AS apk-native-build
-
-    ARG GRADLE_TASK=:appmanager:assembleDebug
-
-    # ~/.android holds the debug keystore; keeping it gives all debug APKs the same signature
-    RUN --mount=type=cache,target=/root/.gradle \
-        --mount=type=cache,target=/root/.android \
-        cd /src/documents-app-android/app_manager && \
-        ./gradlew --no-daemon -PwithNativeCore=true ${GRADLE_TASK} && \
-        mkdir -p /out && \
-        find appmanager/build/outputs/apk -name '*.apk' -exec cp {} /out/ \;
-
-FROM scratch AS apk-native
-    COPY --from=apk-native-build /out/ /
-
-#### UNIT TESTS AND LINT OF THE EDITORS ####
-FROM apk-native-sources AS unit-tests-run
-
-    # The reports are kept also when tests fail; the result is in /out/result
-    RUN --mount=type=cache,target=/root/.gradle \
-        cd /src/documents-app-android/app_manager && \
-        mkdir -p /out && \
-        { ./gradlew --no-daemon -PwithNativeCore=true --continue \
-            :libeditors:testDebugUnitTest :libgeditors:testDebugUnitTest \
-            :libeditors:lintDebug :libgeditors:lintDebug > /out/gradle.log 2>&1; \
-          echo $? > /out/result; } && \
-        for module in libeditors libgeditors; do \
-            cp -r /src/editors-android/$module/build/test-results /out/$module-results 2>/dev/null; \
-            cp -r /src/editors-android/$module/build/reports /out/$module-reports 2>/dev/null; \
-        done; true
-
-FROM scratch AS unit-tests
-    COPY --from=unit-tests-run /out/ /

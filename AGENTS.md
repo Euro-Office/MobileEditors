@@ -54,21 +54,23 @@ The engine (`editors-engine`) hosts **current** sdkjs in V8 through core's doctr
 
 ## Build
 
-All builds run in Docker, so no local Android SDK or NDK is needed:
+All builds run in Docker, so no local Android SDK or NDK is needed. As in DocumentServer, each repository is built by its own module Dockerfile (`core/.docker/core-android.bake.Dockerfile`, `sdkjs/.docker/sdkjs.bake.Dockerfile`, `editors-engine/.docker/editors-engine.bake.Dockerfile`, `documents-app-android/.docker/app.bake.Dockerfile`); `build/docker-bake.hcl` wires them together and `build/android.Dockerfile` has the shared NDK image, the dictionaries and the emulator:
 
 ```sh
 cd build
-docker buildx bake --allow=fs.read=.. android-toolchain   # JDK 17, Android SDK, NDK, CMake (one-time)
-docker buildx bake --allow=fs.read=.. apk                 # builds documents-app-android with the editors-android modules
+export DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)
+docker buildx bake --allow=fs.read=.. apk            # the app with the editors, APKs in build/out/
+docker buildx bake --allow=fs.read=.. unit-tests     # editors' unit tests and Lint
+docker buildx bake --allow=fs.read=.. engine-tests   # engine tests on the host
 ```
 
-The APK is written to `build/out/`. See `build/README.md` for details and the planned native targets (`core-android`, `v8-android`, `sdkjs-native`).
+See `build/README.md` for all targets, the engine's development loop and building in Android Studio. A first build of core for Android takes hours (V8): build `core-android-arm64` and `core-android-x64` one after the other. Their build trees stay in BuildKit cache mounts, which `docker builder prune` deletes.
 
 The app's release secrets (`*.gpg`: keystore, auth strings) are not needed for debug builds. The app uses no Firebase: crash reports stay on the device (`CrashLog` in libtoolkit) until the user sends them. Release builds can take the signing key from `EO_KEYSTORE_FILE`, `EO_KEYSTORE_PASSWORD`, `EO_KEY_ALIAS` and `EO_KEY_PASSWORD`.
 
 ## CI
 
-`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. Core for Android, sdkjs and the host core are cached by the commits of their submodules, so a change of `core` rebuilds core for Android (hours, mostly V8). The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
+`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. The jobs run the bake targets with BuildKit's GitHub Actions cache, so a change of `core` rebuilds core for Android (hours, mostly V8). The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
 
 ## Commits
 

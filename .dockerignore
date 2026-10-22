@@ -1,0 +1,30 @@
+# The build context of docker-bake.hcl is this checkout: the modules' Dockerfiles copy the
+# repositories they build from it
+
+# Git metadata
+.git
+**/.git
+
+# Build outputs and caches of the local builds
+build/work/
+build/out/
+**/node_modules
+**/__pycache__
+**/*.pyc
+*.log
+
+# Gradle and the Android SDK's local settings (the image has its own)
+documents-app-android/**/build
+documents-app-android/**/.gradle
+documents-app-android/**/.cxx
+documents-app-android/**/local.properties
+editors-android/**/build
+editors-android/**/.gradle
+editors-android/**/.cxx
+core/X2tConverter/build/Android/**/.cxx
+core/X2tConverter/build/Android/libx2t/build
+
+# Editors
+.vscode
+.idea
+**/*.swp
