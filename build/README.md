@@ -20,7 +20,7 @@ docker buildx bake --allow=fs.read=.. apk                   # debug APKs in buil
 GRADLE_TASK=:appmanager:assembleRelease docker buildx bake --allow=fs.read=.. apk   # needs the release secrets
 ```
 
-`--allow=fs.read=..` lets bake read the sibling submodules (`../documents-app-android`, `../editors-android`); buildx asks for it because they are outside `build/`.
+`--allow=fs.read=..` lets bake read the sibling submodules (`../documents-app-android`, `../editors-android`, `../editors-engine`); buildx asks for it because they are outside `build/`.
 
 The Gradle cache is kept in a BuildKit cache mount, so later builds are incremental.
 
@@ -62,8 +62,8 @@ With `-e KEEP=1` the emulator keeps running, for further `docker exec <container
 
 | Tests | What | How |
 |---|---|---|
-| Engine | `editors-android/engine/tests`: scripts on document-templates' samples, run by the engine on the host (`eo-render`) | `scripts/engine-host.sh` in core's build image, then `editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package` in the same image with `LD_LIBRARY_PATH=/src/build/work/host/package` |
-| Co-editing | `editors-android/engine/tools/coedit/check.mjs`: the host engine (as the app runs it) and a web editor edit the samples (and a PDF the engine tests saved) together through a Document Server, down to the saved document | A Document Server (CI: `ghcr.io/euro-office/documentserver:latest-dev`), then `check.mjs` with `RUN_ENGINE`, see editors-android/engine/README.md |
+| Engine | `editors-engine/tests`: scripts on document-templates' samples, run by the engine on the host (`eo-render`) | `scripts/engine-host.sh` in core's build image, then `editors-engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package` in the same image with `LD_LIBRARY_PATH=/src/build/work/host/package` |
+| Co-editing | `editors-engine/tools/coedit/check.mjs`: the host engine (as the app runs it) and a web editor edit the samples (and a PDF the engine tests saved) together through a Document Server, down to the saved document | A Document Server (CI: `ghcr.io/euro-office/documentserver:latest-dev`), then `check.mjs` with `RUN_ENGINE`, see editors-engine/README.md |
 | Unit | JVM tests of libeditors and libgeditors | `docker buildx bake --allow=fs.read=.. unit-tests`; reports and the result (0 for success) in `build/out/unit-tests/` |
 | UI | `build/tests/ui`: the app on an emulator opens, edits and saves documents; screen and saved file are checked | `scripts/ui-tests.sh <x86_64 apk>` in the emulator image (`BOOTED=1` to use a running emulator); screenshots and logs in `build/work/ui-tests/` |
 

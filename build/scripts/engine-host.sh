@@ -1,8 +1,8 @@
 #!/bin/sh
 # Builds the editor engine for the host, with its check tool eo-render, for the engine tests
-# (editors-android/engine/tests): core's docbuilder, x2t and allfontsgen, a runtime directory with
+# (editors-engine/tests): core's docbuilder, x2t and allfontsgen, a runtime directory with
 # sdkjs and a font index, and the engine. Runs in core's build image (desktop flavor), as root
-# because of vcpkg, from the AndroidEditors root:
+# because of vcpkg, from the MobileEditors root:
 #
 #   docker buildx build -f core/.docker/core.bake.Dockerfile --target core-base \
 #       --build-arg PRODUCT=desktop --build-arg BUILD_ROOT=/package -t eo-core-base:desktop --load core
@@ -55,7 +55,7 @@ fi
 
 # The engine and eo-render
 if [ ! -f "$WORK/engine/build.ninja" ]; then
-    cmake -S "$ROOT/editors-android/engine" -B "$WORK/engine" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    cmake -S "$ROOT/editors-engine" -B "$WORK/engine" -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DCORE_SOURCE_DIR="$ROOT/core" -DCORE_LIBS_DIR="$PACKAGE" -DEO_ENGINE_TOOLS=ON
 fi
 cmake --build "$WORK/engine"

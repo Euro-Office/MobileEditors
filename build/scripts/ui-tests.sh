@@ -1,7 +1,7 @@
 #!/bin/sh
 # UI tests of the editors on a headless emulator: each test in build/tests/ui opens a document in
 # the app, acts on it through adb and checks the screen and the saved file (see build/tests/ui/lib.sh).
-# Runs in the emulator image from the AndroidEditors root, as root, with KVM:
+# Runs in the emulator image from the MobileEditors root, as root, with KVM:
 #
 #   docker run --rm --device /dev/kvm -v "$PWD":/src -w /src \
 #       ghcr.io/euro-office/android-emulator build/scripts/ui-tests.sh build/out/<x86_64 apk> [test ...]

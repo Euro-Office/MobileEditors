@@ -1,6 +1,6 @@
 #!/bin/sh
 # Cross-compiles core (x2t and the libraries it links) for one Android ABI.
-# Runs inside the core-android-builder image with the AndroidEditors checkout
+# Runs inside the core-android-builder image with the MobileEditors checkout
 # mounted at /src, e.g.:
 #
 #   docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/src -w /src \

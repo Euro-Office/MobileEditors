@@ -1,11 +1,12 @@
 # ==============================================================================
-# Android build image and APK build for AndroidEditors.
+# Android build image and APK build for MobileEditors.
 # Consumed by build/docker-bake.hcl; not meant to be built standalone.
 #
 # REQUIRED CONTEXTS (apk targets):
 # - app:       documents-app-android
 # - editors:   editors-android
 # apk-native additionally:
+# - engine:    editors-engine, the editor engine libeditors' JNI binding builds
 # - core:      core sources (for the libx2t JNI wrapper)
 # - core-libs: build/out/core-android (see scripts/core-android.sh)
 # - sdkjs:     build/out/sdkjs, the editor engine's sdkjs (see scripts/sdkjs.sh)
@@ -90,7 +91,7 @@ FROM android-toolchain AS apk-build
 
     ARG GRADLE_TASK=:appmanager:assembleDebug
 
-    # Same relative layout as the AndroidEditors checkout, so settings.gradle.kts resolves ../../editors-android
+    # Same relative layout as the MobileEditors checkout, so settings.gradle.kts resolves ../../editors-android
     COPY --from=app . /src/documents-app-android
     COPY --from=editors . /src/editors-android
 
@@ -110,6 +111,7 @@ FROM android-toolchain AS apk-native-sources
 
     COPY --from=app . /src/documents-app-android
     COPY --from=editors . /src/editors-android
+    COPY --from=engine . /src/editors-engine
     COPY --from=core . /src/core
     COPY --from=core-libs . /src/build/out/core-android
     COPY --from=sdkjs . /src/build/out/sdkjs

@@ -5,10 +5,10 @@ SPDX-License-Identifier: AGPL
 
 [![License](https://img.shields.io/badge/License-GNU%20AGPL%20V3-green.svg?style=flat)](https://www.gnu.org/licenses/agpl-3.0.en.html)
 
-# Euro-Office for Android
+# Euro-Office Mobile
 **Your sovereign office, on your phone**
 
-This repository builds the Euro-Office Android app with native document, spreadsheet, presentation and PDF editors. It pins the components as git submodules:
+This repository builds the Euro-Office mobile apps with native document, spreadsheet, presentation and PDF editors: the Android app now, the iOS app later. It pins the components as git submodules:
 
 | Submodule | Purpose |
 |---|---|
@@ -18,15 +18,17 @@ This repository builds the Euro-Office Android app with native document, spreads
 | `dictionaries` | Spellcheck dictionaries |
 | `document-templates` | Blank documents for "create new" |
 | `documents-app-android` | The Android app shell: files, accounts, storages, sharing |
-| `editors-android` | The native editors: C++ engine, Kotlin APIs and UI |
+| `editors-engine` | The editor engine both apps share: C++ around sdkjs and core, its tests and co-editing check |
+| `editors-android` | The Android app's editors: the engine's JNI binding, Kotlin APIs and UI |
+| `editors-ios` | The iOS app's editors (not started yet) |
 
-> Status: early development. The editor modules are a skeleton; documents cannot be opened yet.
+> Status: early development. The Android editors open, edit, save and co-edit documents, spreadsheets, presentations and PDFs; the iOS editors are not started.
 
 ## Getting started
 
 ```sh
-git clone --recurse-submodules git@github.com:Euro-Office/AndroidEditors.git
-cd AndroidEditors/build
+git clone --recurse-submodules git@github.com:Euro-Office/MobileEditors.git
+cd MobileEditors/build
 docker buildx bake --allow=fs.read=.. android-toolchain
 docker buildx bake --allow=fs.read=.. apk
 ```

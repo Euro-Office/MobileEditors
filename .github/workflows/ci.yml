@@ -1,6 +1,6 @@
 # Builds the app with the editors and runs the editors' tests: engine (host), co-editing (the
 # host engine and a web editor through a Document Server), unit (JVM) and UI (emulator). Core for Android, sdkjs and the host engine are cached by the commits of their
-# submodules, so most runs only build editors-android and the app.
+# submodules, so most runs only build the editors (editors-engine, editors-android) and the app.
 name: CI
 
 on:
@@ -202,7 +202,7 @@ jobs:
       - name: Engine tests
         run: |
           docker run --rm -v "$PWD":/src -w /src -e LD_LIBRARY_PATH=/src/build/work/host/package \
-              eo-core-base:desktop editors-android/engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package
+              eo-core-base:desktop editors-engine/tests/run.sh build/work/host/engine/eo-render build/work/host/package
       # Co-editing: the engine as the app runs it and a web editor (Playwright) edit the sample
       # files together, and a PDF the engine tests saved; a small storage (tools/coedit/storage.mjs)
       # stands in for Nextcloud
@@ -219,7 +219,7 @@ jobs:
         with:
           node-version: 20
       - name: Co-editing tools
-        working-directory: editors-android/engine/tools/coedit
+        working-directory: editors-engine/tools/coedit
         run: |
           npm ci
           npx playwright install --with-deps chromium
@@ -231,7 +231,7 @@ jobs:
           done
           RUN_ENGINE="docker run -i --rm --network host --user $(id -u):$(id -g) -v $PWD:/src -w /src -e LD_LIBRARY_PATH=/src/build/work/host/package -e EO_REPL=1 eo-core-base:desktop build/work/host/engine/eo-render build/work/host/package {doc} build/work/coedit/engine 1"
           export RUN_ENGINE
-          VERBOSE=1 node editors-android/engine/tools/coedit/check.mjs --document-server http://localhost \
+          VERBOSE=1 node editors-engine/tools/coedit/check.mjs --document-server http://localhost \
               --secret "$DOCUMENT_SERVER_SECRET" --storage-url http://localhost:8095 \
               document-templates/sample/sample.docx document-templates/sample/sample.pptx document-templates/sample/sample.xlsx \
               build/work/engine-tests/docs-pdf.pdf

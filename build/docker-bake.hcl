@@ -68,6 +68,7 @@ target "apk-native" {
   contexts = {
     app       = "../documents-app-android"
     editors   = "../editors-android"
+    engine    = "../editors-engine"
     core      = "../core"
     core-libs = "out/core-android"
     sdkjs     = "out/sdkjs"

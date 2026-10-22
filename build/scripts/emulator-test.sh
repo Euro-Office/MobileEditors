@@ -1,7 +1,7 @@
 #!/bin/sh
 # Opens a document in the app's document editor on a headless emulator and saves a
 # screenshot and the log in build/work/emulator/. Runs in the emulator image from the
-# AndroidEditors root, as root, with KVM:
+# MobileEditors root, as root, with KVM:
 #
 #   docker run --rm --device /dev/kvm -v "$PWD":/src -w /src \
 #       ghcr.io/euro-office/android-emulator build/scripts/emulator-test.sh build/out/<x86_64 apk> [document]

@@ -1,11 +1,15 @@
 ## What this repo is
 
-AndroidEditors is the orchestrator for the Euro-Office Android app with native document editors. Like `DocumentServer` and `DesktopEditors`, it pins the shared submodules and holds the workspace-level build configuration.
+MobileEditors is the orchestrator for the Euro-Office mobile apps with native document editors: the Android app now, the iOS app later. Like `DocumentServer` and `DesktopEditors`, it pins the shared submodules and holds the workspace-level build configuration.
 
 Submodules:
 - `core`, `core-fonts`, `sdkjs`, `sdkjs-forms`, `dictionaries`, `document-templates`: shared with DocumentServer and DesktopEditors.
 - `documents-app-android`: the Android app shell (file manager, accounts, storages, sharing). It is a fork of ONLYOFFICE's open app.
-- `editors-android`: our editor code. It contains the C++ engine (JNI), the per-editor Kotlin APIs and the native editor UI.
+- `editors-engine`: the editor engine both apps share: C++ that runs sdkjs in core's doctrenderer and draws pages with core's graphics engine, the JavaScript that drives sdkjs, and its tests and co-editing check.
+- `editors-android`: the Android app's editors: the engine's JNI binding, the per-editor Kotlin APIs and the native editor UI.
+- `editors-ios`: the iOS app's editors (not started yet).
+
+Code both apps can use goes to `editors-engine`; only what is a platform's own goes to `editors-android` or `editors-ios`.
 
 `web-apps` is intentionally not a submodule. The UI is native, so web-apps is never shipped. Use a separate checkout of `web-apps/apps/*/mobile` only as a reference for which sdkjs `asc_*` calls a feature needs.
 
@@ -17,7 +21,7 @@ Submodules:
 
 ```
 core-fonts → core (host AllFontsGen) → sdkjs (+ sdkjs-forms, native build) → editor assets ─┐
-core (Android cross-build: x2t, doctrenderer, graphics, PdfFile, …) + v8 ─→ editors-android ─┼→ documents-app-android → APK
+core (Android cross-build: x2t, doctrenderer, graphics, PdfFile, …) + v8 ─→ editors-engine → editors-android ─┼→ documents-app-android → APK
 dictionaries, document-templates ──────────────────────────────────────────→ editor assets ─┘
 ```
 
@@ -26,6 +30,7 @@ dictionaries, document-templates ───────────────�
 `documents-app-android/app_manager/settings.gradle.kts` includes the editor Gradle modules by relative path, and includes each only if its directory exists:
 - `:libx2t` → `core/X2tConverter/build/Android/libx2t`
 - `:libeditors`, `:libdocs`, `:libcells`, `:libslides`, `:libgeditors`, `:libresources`, `:libgdocs`, `:libgcells`, `:libgslides` → `editors-android/<module>`
+- `libeditors`' native build (`src/native/cpp/CMakeLists.txt`) includes `editors-engine` (`-DEDITORS_ENGINE_DIR`, the checkout's `editors-engine`)
 
 The app talks to the editors only through a runtime contract, not through compile-time imports. The contract is defined in `documents-app-android/toolkit/libtoolkit/.../managers/utils/EditorsContract.kt`:
 - 4 activity class names: `lib.editors.gdocs.ui.activities.DocsActivity`, `lib.editors.gcells.ui.activities.CellsActivity`, `lib.editors.gslides.ui.activities.SlidesActivity`, `lib.editors.gbase.ui.activities.PdfActivity`.
@@ -36,12 +41,13 @@ Keep these names and keys stable. The app shell must keep working unchanged.
 
 ### Editor engine
 
-The engine hosts **current** sdkjs in V8 through core's doctrenderer and drives it via its public `asc_*` API. Our own typed Kotlin/JNI API sits on top. Pages are rendered with core's graphics engine (`CGraphicsEmbed`) into Android bitmaps. ONLYOFFICE's old native JS layer was deleted from sdkjs in commit `a55a492ff6` (Dec 2023). It is a reference and code donor only; do not restore it wholesale.
+The engine (`editors-engine`) hosts **current** sdkjs in V8 through core's doctrenderer and drives it via its public `asc_*` API. Each app has its own typed binding on top (Android: Kotlin/JNI in `editors-android`). Pages are rendered with core's graphics engine (`CGraphicsEmbed`) into the platform's bitmaps. ONLYOFFICE's old native JS layer was deleted from sdkjs in commit `a55a492ff6` (Dec 2023). It is a reference and code donor only; do not restore it wholesale.
 
 ## Rules
 
 - **Never** modify submodule contents directly from here without checking that submodule's own `AGENTS.md`.
 - **Never** change the editor contract (`EditorsContract.kt` class names, extras, result codes) without changing both `documents-app-android` and `editors-android` together.
+- **Never** change the engine's commands (`eoEngine.*`) or state in `editors-engine` without changing the apps' bindings (`editors-android`'s `EditorDocument`, later `editors-ios`) along.
 - **Never** introduce workspace-wide dependencies that break the "no root package.json" rule in submodules.
 - **Always** update this `AGENTS.md` when you change workspace-level developer workflows.
 - **Never** update the refs of shared submodules (`core`, `sdkjs`, …) in a commit that also changes anything else. Bump them deliberately, in their own commits.

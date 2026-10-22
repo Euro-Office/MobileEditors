@@ -22,3 +22,9 @@
 [submodule "document-templates"]
 	path = document-templates
 	url = https://github.com/Euro-Office/document-templates.git
+[submodule "editors-engine"]
+	path = editors-engine
+	url = https://github.com/Euro-Office/editors-engine.git
+[submodule "editors-ios"]
+	path = editors-ios
+	url = https://github.com/Euro-Office/editors-ios.git

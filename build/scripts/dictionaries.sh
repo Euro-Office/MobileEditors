@@ -5,14 +5,14 @@
 # - index.json: the dictionaries submodule commit this checkout pins, where to download the
 #   other dictionaries from at that commit, and the languages (LCIDs) of each dictionary
 #
-# Runs where the AndroidEditors checkout is (needs git), e.g.: build/scripts/dictionaries.sh
+# Runs where the MobileEditors checkout is (needs git), e.g.: build/scripts/dictionaries.sh
 set -eu
 
 ROOT="${ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 SOURCE="$ROOT/dictionaries"
 OUT_DIR="$ROOT/build/out/dictionaries"
 
-# The commit recorded in AndroidEditors (not the submodule's working tree), and its repository
+# The commit recorded in MobileEditors (not the submodule's working tree), and its repository
 COMMIT=$(git -C "$ROOT" ls-tree HEAD dictionaries | awk '{print $3}')
 REPOSITORY=$(git -C "$ROOT" config -f .gitmodules submodule.dictionaries.url | sed 's#\.git$##; s#^git@github.com:#https://github.com/#')
 URL=$(echo "$REPOSITORY" | sed 's#^https://github.com/#https://raw.githubusercontent.com/#')

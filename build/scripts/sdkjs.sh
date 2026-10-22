@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds sdkjs (with sdkjs-forms) and collects the files the editor engine loads
 # in build/out/sdkjs (read by editors-android's libeditors). Runs in a Node image
-# with the AndroidEditors checkout mounted at /src, e.g.:
+# with the MobileEditors checkout mounted at /src, e.g.:
 #
 #   docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
 #       -v "$PWD":/src -w /src node:20 build/scripts/sdkjs.sh
@@ -26,7 +26,7 @@ done
 cp -r "$DEPLOY/slide/themes" "$OUT_DIR/slide/"
 cp "$DEPLOY"/common/Native/*.js "$OUT_DIR/common/Native/"
 cp "$DEPLOY/common/libfont/engine/fonts_native.js" "$OUT_DIR/common/libfont/engine/"
-# The PDF editor reads PDFs through core's reader with it (editors-android/engine/src/pdf.js)
+# The PDF editor reads PDFs through core's reader with it (editors-engine/src/pdf.js)
 mkdir -p "$OUT_DIR/pdf/src/engine"
 cp "$DEPLOY/pdf/src/engine/drawingfile_native.js" "$OUT_DIR/pdf/src/engine/"
 # SmartArt definitions the editors offer (read by the engine instead of loading them over the web)
