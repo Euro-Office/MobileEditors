@@ -54,7 +54,7 @@ The engine (`editors-engine`) hosts **current** sdkjs in V8 through core's doctr
 
 ## Build
 
-All builds run in Docker, so no local Android SDK or NDK is needed. As in DocumentServer, each repository is built by its own module Dockerfile (`core/.docker/core-android.bake.Dockerfile`, `sdkjs/.docker/sdkjs.bake.Dockerfile`, `editors-engine/.docker/editors-engine.bake.Dockerfile`, `documents-app-android/.docker/app.bake.Dockerfile`); `build/docker-bake.hcl` wires them together and `build/android.Dockerfile` has the shared NDK image, the dictionaries and the emulator:
+The Android builds run in Docker, so no local Android SDK or NDK is needed (iOS: see below). As in DocumentServer, each repository is built by its own module Dockerfile (`core/.docker/core-android.bake.Dockerfile`, `sdkjs/.docker/sdkjs.bake.Dockerfile`, `editors-engine/.docker/editors-engine.bake.Dockerfile`, `documents-app-android/.docker/app.bake.Dockerfile`); `build/docker-bake.hcl` wires them together and `build/android.Dockerfile` has the shared NDK image, the dictionaries and the emulator:
 
 ```sh
 cd build
@@ -68,9 +68,21 @@ See `build/README.md` for all targets, the engine's development loop and buildin
 
 The app's release secrets (`*.gpg`: keystore, auth strings) are not needed for debug builds. The app uses no Firebase: crash reports stay on the device (`CrashLog` in libtoolkit) until the user sends them. Release builds can take the signing key from `EO_KEYSTORE_FILE`, `EO_KEYSTORE_PASSWORD`, `EO_KEY_ALIAS` and `EO_KEY_PASSWORD`.
 
+### iOS
+
+The iOS app (`documents-app-ios`, with the editors of `editors-ios`) builds on a Mac, not in Docker: `build/ios/build.sh` builds core with CMake for macOS (JavaScriptCore, for `eo-render`) and for the simulator or devices, editors-ios' `EOEngine.xcframework`, the runtime and the template gallery, then runs `xcodebuild`. Only sdkjs comes from bake (`sdkjs-native`, or `SDKJS_DIR`). See `build/README.md`:
+
+```sh
+build/ios/build.sh                                  # the app for the simulator, in build/work/ios
+EO_STEPS="runtime test" build/ios/build.sh          # editors-ios' Swift tests
+EO_DRY_RUN=1 build/ios/build.sh                     # print the commands
+```
+
+`documents-app-ios` is not a submodule yet; the script and CI expect it next to `editors-ios`.
+
 ## CI
 
-`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. The jobs run the bake targets in `docker/bake-action` with BuildKit's GitHub Actions cache, which only main writes. The Core jobs take core from the packages core's CI publishes for the pinned commit (`build/scripts/fetch-core.sh`); while core's CI is still building them, `wait-for-core` holds the run back. Only without a package do they build core for Android, through a ccache kept per ABI in the Actions cache. Either way they hand core to the APK job as artifacts. The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
+`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. The jobs run the bake targets in `docker/bake-action` with BuildKit's GitHub Actions cache, which only main writes. The Core jobs take core from the packages core's CI publishes for the pinned commit (`build/scripts/fetch-core.sh`); while core's CI is still building them, `wait-for-core` holds the run back. Only without a package do they build core for Android, through a ccache kept per ABI in the Actions cache. Either way they hand core to the APK job as artifacts. The `ios` job (macOS, after `ios-sdkjs` builds sdkjs on Linux) runs `build/ios/build.sh`: core for macOS and the simulator (cached per core commit), the engine, editors-ios' Swift tests and, once `documents-app-ios` is a submodule, the template gallery (from the private document-corpus) and the app for the simulator. The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
 
 ## Commits
 

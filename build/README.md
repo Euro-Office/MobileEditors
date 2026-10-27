@@ -1,6 +1,6 @@
 # Build
 
-All builds run in Docker with `docker buildx bake`. Run the commands from this directory.
+The Android builds run in Docker with `docker buildx bake` (the iOS build runs on a Mac, see [iOS](#ios)). Run the commands from this directory.
 
 As in DocumentServer and DesktopEditors, each repository says how it is built in its own module Dockerfile (`.docker/*.bake.Dockerfile`); `docker-bake.hcl` wires them together with `target:` contexts. The build context is the whole checkout (see `../.dockerignore`), so bake needs `--allow=fs.read=..`.
 
@@ -111,3 +111,26 @@ There is no release key yet: the release has the debug APKs, each CI run signs t
 - The NDK version in `android.Dockerfile` (`android-ndk`) and the SDK versions in `documents-app-android/.docker/app.bake.Dockerfile` must match `documents-app-android/app_manager/gradle/libs.versions.toml` (`ndk`, `compileSdk`).
 - Debug builds need no secrets. Without `google-services.json`, the Google Services plugin is skipped and Firebase stays uninitialised.
 - `:libx2t` is only included with `-PwithNativeCore=true` (set by the `apk` and `unit-tests` targets).
+
+## iOS
+
+The iOS app builds on a Mac with Xcode, CMake and Ninja (`brew install ninja`), not in Docker: `ios/build.sh` builds core with CMake (for macOS with JavaScriptCore, and for the simulator or devices), the engine (editors-engine's `eo-render` for macOS, and editors-ios' `EOEngine.xcframework` with core's xcframeworks), assembles the runtime, makes the template gallery and runs `xcodebuild` on `documents-app-ios`. It expects `editors-ios` and `documents-app-ios` next to the other submodules.
+
+```sh
+ios/build.sh                                                  # the app for the simulator
+EO_DESTINATION=device EO_DEVELOPMENT_TEAM=<team> EO_ALLOW_PROVISIONING_UPDATES=1 ios/build.sh
+EO_STEPS="runtime test" ios/build.sh                          # editors-ios' Swift tests on the runtime
+EO_DRY_RUN=1 ios/build.sh                                     # print the commands
+```
+
+| Step (`EO_STEPS`) | What it does |
+|---|---|
+| `sdkjs` | The `sdkjs-native` target (needs Docker), unless `SDKJS_DIR` names its output |
+| `core` | core for macOS (`mac-jsc`) and iOS (`ios-sim` or `ios-dev`), each with its third-party libraries (`3rdparty-*`); skipped while core is clean and at the commit of the last build. The first build takes about an hour per platform |
+| `engine` | `eo-render` for macOS and `EOEngine.xcframework` (`editors-ios/Engine/build.sh`) |
+| `runtime` | `runtime/`: core for macOS, `eo-render`, sdkjs, `DoctRenderer.config`, `empty/` and the index of the fonts the app bundles (`EO_FONTS`, from core-fonts, in `fonts/`) |
+| `templates` | The gallery's templates (`documents-app-ios/tools/templates.sh`) from `EO_TEMPLATE_SOURCES` (document-corpus' `samples/`); without it the gallery is empty |
+| `test` | `swift test` in editors-ios and in `editors-ios/Engine` (with `EO_RUNTIME_DIR`); not in the default steps |
+| `app` | `xcodebuild` of the app with the runtime, fonts and templates above; the app in `DerivedData/Build/Products/` |
+
+Everything goes to `build/work/ios/` (`EO_IOS_WORK`). The script's header lists the other settings (configuration, signing, checkouts).

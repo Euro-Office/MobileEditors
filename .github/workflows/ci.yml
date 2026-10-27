@@ -378,3 +378,86 @@ jobs:
           EOF
           gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "$VERSION_NAME" \
               --notes-file notes.md --generate-notes "${args[@]}"
+
+  # sdkjs for the iOS jobs (macOS runners have no Docker)
+  ios-sdkjs:
+    name: sdkjs for iOS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: sdkjs
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. sdkjs-native --set '*.output=type=local,dest=out/sdkjs' \
+              --set sdkjs-native.cache-from=type=gha,scope=sdkjs-native
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-sdkjs
+          path: build/out/sdkjs
+          retention-days: 1
+
+  # The iOS editors (editors-ios) and app (documents-app-ios, once it is a submodule) on macOS with
+  # build/ios/build.sh: core for macOS and the simulator, the engine, editors-ios' Swift tests and
+  # the app for the simulator. macOS minutes cost 10 times Linux ones: a run with core cached (same
+  # core commit) takes about 20 minutes, a change of core rebuilds it for both platforms (1 to 2
+  # hours; its third-party libraries stay cached unless their versions change).
+  ios:
+    name: iOS editors and app
+    needs: ios-sdkjs
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      EO_IOS_WORK: ${{ github.workspace }}/build/work/ios
+      SDKJS_DIR: ${{ github.workspace }}/build/out/sdkjs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-sdkjs
+          path: build/out/sdkjs
+      - name: Tools
+        run: |
+          xcodebuild -version
+          brew install ninja
+      - name: Core commit
+        id: core
+        run: echo "commit=$(git rev-parse HEAD:core)" >> "$GITHUB_OUTPUT"
+      # core's results and its third-party libraries; build.sh skips core when its stamp matches
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/work/ios/3rdparty-*/install
+            build/work/ios/core-*-out
+            build/work/ios/core-mac-jsc/allfontsgen/allfontsgen
+            build/work/ios/stamps
+          key: ios-core-${{ steps.core.outputs.commit }}-${{ hashFiles('build/ios/build.sh') }}
+          restore-keys: ios-core-
+      - name: Core and engine
+        run: EO_STEPS="core engine runtime" build/ios/build.sh
+      - name: Swift tests
+        run: EO_STEPS="test" build/ios/build.sh
+      # Nextcloud's templates for the gallery (document-corpus is private)
+      - if: hashFiles('documents-app-ios/Documents.xcodeproj/project.pbxproj') != ''
+        uses: actions/checkout@v4
+        with:
+          repository: Euro-Office/document-corpus
+          path: build/work/document-corpus
+          sparse-checkout: samples
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - name: App for the simulator
+        if: hashFiles('documents-app-ios/Documents.xcodeproj/project.pbxproj') != ''
+        run: |
+          EO_STEPS="templates app" EO_TEMPLATE_SOURCES="$PWD/build/work/document-corpus/samples" \
+              EO_XCODEBUILD_ARGS=CODE_SIGNING_ALLOWED=NO build/ios/build.sh
+      - if: hashFiles('documents-app-ios/Documents.xcodeproj/project.pbxproj') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: build/work/ios/DerivedData/Build/Products/Debug-iphonesimulator/Documents.app
