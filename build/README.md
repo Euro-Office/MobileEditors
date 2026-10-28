@@ -92,6 +92,18 @@ With `-e KEEP=1` the emulator keeps running, for further `docker exec <container
 | Unit | JVM tests and Lint of libeditors and libgeditors | `docker buildx bake --allow=fs.read=.. unit-tests` |
 | UI | `build/tests/ui`: the app on an emulator opens, edits and saves documents; screen and saved file are checked | `scripts/ui-tests.sh <x86_64 apk>` in the emulator image (`BOOTED=1` to use a running emulator); screenshots and logs in `build/work/ui-tests/` |
 
+## Releasing
+
+The app's version is `VERSION` in the repository root: `0.1.0-alpha.1`, `0.1.0-beta.1`, `0.1.0-rc.1` or `0.1.0`. `scripts/version.sh` derives the version code from it (`MMmmppSS`, the stage `SS` is the alpha number, 30 + the beta number, 60 + the rc number or 99 for the final release), and CI passes both to the `apk` target (`VERSION_NAME`, `VERSION_CODE`), which hands them to the app's Gradle build (`-PappVersionName`, `-PappVersionCode`; without them the app keeps its own version).
+
+Only MobileEditors is tagged: its tag pins every submodule. To release:
+
+1. Set `VERSION` in a pull request and merge it.
+2. Tag the merge commit: `git tag -a v0.1.0-alpha.1 -m "Release v0.1.0-alpha.1" && git push origin v0.1.0-alpha.1`.
+3. CI builds and tests the tag. Once every job passed, the `release` job publishes a GitHub release with the `arm64-v8a` and `x86_64` APKs and their checksums, a prerelease for alpha, beta and rc versions.
+
+There is no release key yet: the release has the debug APKs, each CI run signs them with a new debug key, so a release only installs over the previous one after uninstalling it.
+
 ## Notes
 
 - The NDK version in `android.Dockerfile` (`android-ndk`) and the SDK versions in `documents-app-android/.docker/app.bake.Dockerfile` must match `documents-app-android/app_manager/gradle/libs.versions.toml` (`ndk`, `compileSdk`).

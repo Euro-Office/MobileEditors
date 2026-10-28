@@ -25,6 +25,15 @@ variable "GRADLE_TASK" {
   default = ":appmanager:assembleDebug"
 }
 
+# The app version (build/scripts/version.sh), else the one the app's Gradle build sets
+variable "VERSION_NAME" {
+  default = ""
+}
+
+variable "VERSION_CODE" {
+  default = ""
+}
+
 # The dictionaries commit MobileEditors pins (git rev-parse HEAD:dictionaries), for the index of
 # the dictionaries the app downloads
 variable "DICTIONARIES_COMMIT" {
@@ -146,7 +155,7 @@ target "apk" {
   dockerfile = "./documents-app-android/.docker/app.bake.Dockerfile"
   target     = "apk-editors"
   args = {
-    GRADLE_TASK = GRADLE_TASK
+    GRADLE_TASK = VERSION_NAME == "" ? GRADLE_TASK : "${GRADLE_TASK} -PappVersionName=${VERSION_NAME} -PappVersionCode=${VERSION_CODE}"
   }
   contexts = {
     android-ndk        = "target:android-ndk"
