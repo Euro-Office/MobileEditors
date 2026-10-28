@@ -2,12 +2,14 @@
 # host engine and a web editor through a Document Server), unit (JVM) and UI (emulator). Each job
 # runs build/docker-bake.hcl's targets (the repositories' module Dockerfiles) with BuildKit's
 # GitHub Actions cache, so most runs only build the editors (editors-engine, editors-android) and
-# the app; a change of core rebuilds core (hours, mostly V8).
+# the app; a change of core rebuilds core (hours, mostly V8). A tag v<VERSION> also publishes the
+# APKs as a GitHub release once every job passed.
 name: CI
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -56,6 +58,8 @@ jobs:
           submodules: recursive
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      - name: Version
+        run: build/scripts/version.sh >>"$GITHUB_ENV"
       - name: Unit tests
         working-directory: build
         run: |
@@ -213,3 +217,42 @@ jobs:
           name: ui-tests
           path: build/work/ui-tests
           if-no-files-found: ignore
+
+  # The release of a tag: the APKs of the apk job (the debug build: no release key yet), a
+  # prerelease for alpha, beta and rc versions
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [apk, engine-tests, ui-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        run: |
+          build/scripts/version.sh >>"$GITHUB_ENV"
+          eval "$(build/scripts/version.sh)"
+          [ "$GITHUB_REF_NAME" = "v$VERSION_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME does not match VERSION $VERSION_NAME"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir release
+          for abi in arm64-v8a x86_64; do
+              cp "$(find apk -name "*-$abi-*.apk" | head -1)" "release/euro-office-documents-$VERSION_NAME-$abi.apk"
+          done
+          (cd release && sha256sum -- *.apk >SHA256SUMS)
+          args=()
+          [[ $VERSION_NAME != *-* ]] || args+=(--prerelease)
+          cat >notes.md <<EOF
+          Euro-Office Documents $VERSION_NAME for Android (version code $VERSION_CODE): \`arm64-v8a\` for phones and tablets, \`x86_64\` for the emulator.
+
+          This build is signed with a temporary key: uninstall the previous build before installing it.
+          EOF
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "$VERSION_NAME" \
+              --notes-file notes.md --generate-notes "${args[@]}"
