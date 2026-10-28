@@ -1,0 +1,14 @@
+name: Update submodules to latest main branch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  update-submodules:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: Euro-Office/DocumentServer/.github/workflows/update-submodules.yml@main
+    secrets: inherit
