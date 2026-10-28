@@ -61,17 +61,21 @@ tap_node() {
 tap_desc() { tap_node "content-desc=\"$1\""; }
 tap_text() { tap_node "text=\"$1\""; }
 
-# A button of the bottom toolbar, scrolling the toolbar step by step to it if needed
-tap_tool() {
-    tool=$1
-    set -- $(center 'id/editorToolbar"')
-    for _ in 1 2 3 4 5 6; do
+# A button in a scrolling row (the node of the row given), scrolling the row step by step to it
+# if needed
+tap_in_row() {
+    tool=$2
+    set -- $(center "$1")
+    for _ in 1 2 3 4 5 6 7 8; do
         [ -n "$(center "content-desc=\"$tool\"")" ] && break
         [ $# -eq 2 ] && adb shell input swipe 700 "$2" 400 "$2" 400
         sleep 1
     done
     tap_desc "$tool"
 }
+
+# A button of the bottom toolbar
+tap_tool() { tap_in_row 'id/editorToolbar"' "$1"; }
 
 # The node is on the screen (shown, or read by screen readers)
 expect() {
