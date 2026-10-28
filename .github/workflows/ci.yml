@@ -1,0 +1,258 @@
+# Builds the app with the editors and runs the editors' tests: engine (host), co-editing (the
+# host engine and a web editor through a Document Server), unit (JVM) and UI (emulator). Each job
+# runs build/docker-bake.hcl's targets (the repositories' module Dockerfiles) with BuildKit's
+# GitHub Actions cache, so most runs only build the editors (editors-engine, editors-android) and
+# the app; a change of core rebuilds core (hours, mostly V8). A tag v<VERSION> also publishes the
+# APKs as a GitHub release once every job passed.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Core for Android per ABI, cached for the apk job (each one builds V8)
+  core-android:
+    name: Core (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      matrix:
+        target: [core-android-arm64, core-android-x64]
+    steps:
+      - name: Free disk space (the build needs about 20 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker image prune -af
+          df -h /
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build core
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. ${{ matrix.target }} \
+              --set android-ndk.cache-from=type=gha,scope=android-ndk --set android-ndk.cache-to=type=gha,mode=max,scope=android-ndk \
+              --set ${{ matrix.target }}.cache-from=type=gha,scope=${{ matrix.target }} \
+              --set ${{ matrix.target }}.cache-to=type=gha,mode=max,scope=${{ matrix.target }}
+
+  apk:
+    name: APK and unit tests
+    needs: core-android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Version
+        run: build/scripts/version.sh >>"$GITHUB_ENV"
+      - name: Unit tests
+        working-directory: build
+        run: |
+          export DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)
+          docker buildx bake --allow=fs.read=.. unit-tests $CACHE
+          tail -30 out/unit-tests/gradle.log
+          test "$(cat out/unit-tests/result)" = 0
+      - name: APK
+        working-directory: build
+        run: |
+          export DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)
+          docker buildx bake --allow=fs.read=.. apk $CACHE
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests
+          path: build/out/unit-tests
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: |
+            build/out/*arm64-v8a*.apk
+            build/out/*x86_64*.apk
+    env:
+      # core from the core-android job; the app's own layers are cached for the next run
+      CACHE: >-
+        --set android-ndk.cache-from=type=gha,scope=android-ndk
+        --set core-android-arm64.cache-from=type=gha,scope=core-android-arm64
+        --set core-android-x64.cache-from=type=gha,scope=core-android-x64
+        --set sdkjs-native.cache-from=type=gha,scope=sdkjs-native
+        --set sdkjs-native.cache-to=type=gha,mode=max,scope=sdkjs-native
+        --set dictionaries.cache-from=type=gha,scope=dictionaries
+        --set dictionaries.cache-to=type=gha,mode=max,scope=dictionaries
+        --set apk.cache-from=type=gha,scope=android
+        --set apk.cache-to=type=gha,mode=max,scope=android
+        --set unit-tests.cache-from=type=gha,scope=android
+
+  engine-tests:
+    name: Engine and co-editing tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # The Document Server for co-editing (its development image follows DocumentServer's main)
+      DOCUMENT_SERVER_IMAGE: ghcr.io/euro-office/documentserver:latest-dev
+      DOCUMENT_SERVER_SECRET: ci-co-editing-secret
+      CACHE: >-
+        --set core-host.cache-from=type=gha,scope=core-host
+        --set core-host.cache-to=type=gha,mode=max,scope=core-host
+        --set sdkjs-native.cache-from=type=gha,scope=sdkjs-native
+        --set engine-host.cache-from=type=gha,scope=engine-host
+        --set engine-host.cache-to=type=gha,mode=max,scope=engine-host
+    steps:
+      - name: Free disk space (core for the host needs about 20 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker image prune -af
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Engine tests
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. engine-tests $CACHE
+          cat out/engine-tests/tests.log
+          test "$(cat out/engine-tests/result)" = 0
+      - name: Engine for the co-editing tests
+        working-directory: build
+        run: docker buildx bake --allow=fs.read=.. engine-host --load $CACHE
+      # Co-editing: the engine as the app runs it and a web editor (Playwright) edit the sample
+      # files together, and a PDF the engine tests saved; a small storage (tools/coedit/storage.mjs)
+      # stands in for Nextcloud
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Document Server
+        run: |
+          docker run -d --name documentserver --network host -e JWT_SECRET="$DOCUMENT_SERVER_SECRET" \
+              -e ALLOW_PRIVATE_IP_ADDRESS=true -e USE_UNAUTHORIZED_STORAGE=true "$DOCUMENT_SERVER_IMAGE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Co-editing tools
+        working-directory: editors-engine/tools/coedit
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Co-editing tests
+        run: |
+          for _ in $(seq 1 60); do
+              [ "$(curl -sf http://localhost/healthcheck)" = "true" ] && break
+              sleep 5
+          done
+          RUN_ENGINE="docker run -i --rm --network host --user $(id -u):$(id -g) -v $PWD:/src -w /src -e EO_REPL=1 ghcr.io/euro-office/editors-engine-host eo-render /package/bin {doc} build/work/coedit/engine 1"
+          export RUN_ENGINE
+          VERBOSE=1 node editors-engine/tools/coedit/check.mjs --document-server http://localhost \
+              --secret "$DOCUMENT_SERVER_SECRET" --storage-url http://localhost:8095 \
+              document-templates/sample/sample.docx document-templates/sample/sample.pptx document-templates/sample/sample.xlsx \
+              build/out/engine-tests/files/docs-pdf.pdf
+      - if: failure()
+        run: docker logs documentserver 2>&1 | tail -200
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: co-editing
+          path: build/work/coedit/storage
+          if-no-files-found: ignore
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-tests
+          path: build/out/engine-tests
+          if-no-files-found: ignore
+
+  ui-tests:
+    name: UI tests
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: build/out
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: docker/setup-buildx-action@v3
+      - name: Emulator image
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. emulator --load \
+              --set android-ndk.cache-from=type=gha,scope=android-ndk \
+              --set emulator.cache-from=type=gha,scope=emulator --set emulator.cache-to=type=gha,mode=max,scope=emulator
+      - name: UI tests
+        run: |
+          docker run --rm --device /dev/kvm -v "$PWD":/src -w /src ghcr.io/euro-office/android-emulator \
+              build/scripts/ui-tests.sh "$(find build/out -name "*x86_64*.apk" | head -1)"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-tests
+          path: build/work/ui-tests
+          if-no-files-found: ignore
+
+  # The release of a tag: the APKs of the apk job (the debug build: no release key yet), a
+  # prerelease for alpha, beta and rc versions
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [apk, engine-tests, ui-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        run: |
+          build/scripts/version.sh >>"$GITHUB_ENV"
+          eval "$(build/scripts/version.sh)"
+          [ "$GITHUB_REF_NAME" = "v$VERSION_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME does not match VERSION $VERSION_NAME"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir release
+          for abi in arm64-v8a x86_64; do
+              cp "$(find apk -name "*-$abi-*.apk" | head -1)" "release/euro-office-documents-$VERSION_NAME-$abi.apk"
+          done
+          (cd release && sha256sum -- *.apk >SHA256SUMS)
+          args=()
+          [[ $VERSION_NAME != *-* ]] || args+=(--prerelease)
+          cat >notes.md <<EOF
+          Euro-Office Documents $VERSION_NAME for Android (version code $VERSION_CODE): \`arm64-v8a\` for phones and tablets, \`x86_64\` for the emulator.
+
+          This build is signed with a temporary key: uninstall the previous build before installing it.
+          EOF
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "$VERSION_NAME" \
+              --notes-file notes.md --generate-notes "${args[@]}"
