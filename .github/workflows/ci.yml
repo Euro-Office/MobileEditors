@@ -18,7 +18,15 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Runs on main and tags finish, so they fill the cache that PRs and tags read
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The remote cache of core's third-party builds (V8 and co., core/Common/3dParty), passed to the
+# builds as the nextcloud_user and nextcloud_pass secrets (build/docker-bake.hcl); without them,
+# a change of core builds them all
+env:
+  NEXTCLOUD_USER: ${{ secrets.NEXTCLOUD_USER }}
+  NEXTCLOUD_PASS: ${{ secrets.NEXTCLOUD_PASS }}
 
 jobs:
   # Core for Android per ABI, cached for the apk job (each one builds V8)
@@ -40,13 +48,15 @@ jobs:
           submodules: recursive
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
+      - uses: crazy-max/ghaction-github-runtime@v3
       - name: Build core
         working-directory: build
         run: |
           docker buildx bake --allow=fs.read=.. ${{ matrix.target }} \
               --set android-ndk.cache-from=type=gha,scope=android-ndk --set android-ndk.cache-to=type=gha,mode=max,scope=android-ndk \
               --set ${{ matrix.target }}.cache-from=type=gha,scope=${{ matrix.target }} \
-              --set ${{ matrix.target }}.cache-to=type=gha,mode=max,scope=${{ matrix.target }}
+              --set ${{ matrix.target }}.cache-to=type=gha,mode=min,scope=${{ matrix.target }}
 
   apk:
     name: APK and unit tests
@@ -58,6 +68,8 @@ jobs:
           submodules: recursive
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
+      - uses: crazy-max/ghaction-github-runtime@v3
       - name: Version
         run: build/scripts/version.sh >>"$GITHUB_ENV"
       - name: Unit tests
@@ -125,6 +137,8 @@ jobs:
           submodules: recursive
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
+      - uses: crazy-max/ghaction-github-runtime@v3
       - name: Engine tests
         working-directory: build
         run: |
@@ -201,6 +215,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - uses: docker/setup-buildx-action@v3
+      # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
+      - uses: crazy-max/ghaction-github-runtime@v3
       - name: Emulator image
         working-directory: build
         run: |
