@@ -17,8 +17,8 @@
 FROM ubuntu:24.04 AS android-ndk
 
     # Keep in sync with documents-app-android/app_manager/gradle/libs.versions.toml (ndk)
-    ARG ANDROID_NDK_RELEASE=r28c
-    ARG ANDROID_NDK_VERSION=28.2.13676358
+    ARG ANDROID_NDK_RELEASE=r30
+    ARG ANDROID_NDK_VERSION=30.0.16248370
 
     # Host tools of core's third-party builds (core/Common/3dParty/build_3rdparty.py)
     RUN apt-get update && \

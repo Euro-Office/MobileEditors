@@ -26,7 +26,7 @@ As in DocumentServer and DesktopEditors, each repository says how it is built in
 | `core-host` | core's desktop build, for `engine-host` |
 | `sdkjs-native` | sdkjs for the engine |
 | `dictionaries` | The English dictionary, which comes with the app, and `index.json`: the `dictionaries` commit this checkout pins, from which the app downloads other languages (raw.githubusercontent.com) when a document or the device language needs them |
-| `android-ndk` | Ubuntu 24.04 with NDK 28.2.13676358 and the host tools for core's third-party builds |
+| `android-ndk` | Ubuntu 24.04 with NDK 30.0.16248370 and the host tools for core's third-party builds |
 | `android-toolchain` | `android-ndk` plus JDK 17, Android SDK (platform 36, build-tools 36.0.0) and CMake 3.22.1 |
 
 ## Usage
