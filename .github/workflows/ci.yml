@@ -21,13 +21,6 @@ concurrency:
   # Runs on main and tags finish, so they fill the cache that PRs and tags read
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# The remote cache of core's third-party builds (V8 and co., core/Common/3dParty), passed to the
-# builds as the nextcloud_user and nextcloud_pass secrets (build/docker-bake.hcl); without them,
-# a change of core builds them all
-env:
-  NEXTCLOUD_USER: ${{ secrets.NEXTCLOUD_USER }}
-  NEXTCLOUD_PASS: ${{ secrets.NEXTCLOUD_PASS }}
-
 jobs:
   # Core for Android per ABI, cached for the apk job (each one builds V8)
   core-android:
@@ -49,7 +42,7 @@ jobs:
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
       # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Build core
         working-directory: build
         run: |
@@ -69,9 +62,16 @@ jobs:
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
       # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Version
         run: build/scripts/version.sh >>"$GITHUB_ENV"
+      # One at a time: baked together, the ABIs share their first steps and only one of them finds
+      # its cache, so the other one is built again
+      - name: Core
+        working-directory: build
+        run: |
+          docker buildx bake --allow=fs.read=.. core-android-arm64 $CACHE
+          docker buildx bake --allow=fs.read=.. core-android-x64 $CACHE
       - name: Unit tests
         working-directory: build
         run: |
@@ -138,7 +138,7 @@ jobs:
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
       # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Engine tests
         working-directory: build
         run: |
@@ -216,7 +216,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: docker/setup-buildx-action@v3
       # The cache (type=gha) needs the runtime token and URLs, which run steps don't get
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Emulator image
         working-directory: build
         run: |

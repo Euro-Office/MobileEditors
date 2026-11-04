@@ -88,8 +88,6 @@ target "core-android-arm64" {
   contexts = {
     android-ndk = "target:android-ndk"
   }
-  # The remote cache of the third-party builds, when the environment has them
-  secret = ["id=nextcloud_user,env=NEXTCLOUD_USER", "id=nextcloud_pass,env=NEXTCLOUD_PASS"]
 }
 
 target "core-android-x64" {
@@ -108,8 +106,6 @@ target "core-host" {
     PRODUCT    = "desktop"
     BUILD_ROOT = "/package"
   }
-  # The remote cache of the third-party builds, when the environment has them
-  secret = ["id=nextcloud_user,env=NEXTCLOUD_USER", "id=nextcloud_pass,env=NEXTCLOUD_PASS"]
 }
 
 target "sdkjs-native" {
