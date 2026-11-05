@@ -59,10 +59,12 @@ All builds run in Docker, so no local Android SDK or NDK is needed. As in Docume
 ```sh
 cd build
 export DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)
-docker buildx bake --allow=fs.read=.. apk            # the app with the editors, APKs in build/out/
+docker buildx bake --allow=fs.read=.. apk            # the app with the editors, APKs of both brands in build/out/
 docker buildx bake --allow=fs.read=.. unit-tests     # editors' unit tests and Lint
 docker buildx bake --allow=fs.read=.. engine-tests   # engine tests on the host
 ```
+
+The app has two brands, product flavors of `documents-app-android`: Euro-Office Documents and Nextcloud Office.
 
 See `build/README.md` for all targets, the engine's development loop and building in Android Studio. A first build of core for Android takes hours (V8): build `core-android-arm64` and `core-android-x64` one after the other. Their build trees stay in BuildKit cache mounts, which `docker builder prune` deletes.
 
