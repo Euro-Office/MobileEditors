@@ -40,6 +40,16 @@ variable "DICTIONARIES_COMMIT" {
   default = ""
 }
 
+# Core for Android built earlier (a directory with its lib*.so, e.g. CI's artifact), used instead
+# of the core-android-* targets
+variable "CORE_ANDROID_ARM64" {
+  default = ""
+}
+
+variable "CORE_ANDROID_X64" {
+  default = ""
+}
+
 group "default" {
   targets = ["apk"]
 }
@@ -159,8 +169,8 @@ target "apk" {
   }
   contexts = {
     android-ndk        = "target:android-ndk"
-    core-android-arm64 = "target:core-android-arm64"
-    core-android-x64   = "target:core-android-x64"
+    core-android-arm64 = CORE_ANDROID_ARM64 != "" ? CORE_ANDROID_ARM64 : "target:core-android-arm64"
+    core-android-x64   = CORE_ANDROID_X64 != "" ? CORE_ANDROID_X64 : "target:core-android-x64"
     sdkjs-native       = "target:sdkjs-native"
     dictionaries       = "target:dictionaries"
   }

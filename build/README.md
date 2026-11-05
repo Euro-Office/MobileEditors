@@ -57,6 +57,8 @@ docker buildx bake --allow=fs.read=.. dictionaries --set '*.output=type=local,de
 
 and build `documents-app-android/app_manager` with `-PwithNativeCore=true`.
 
+`CORE_ANDROID_ARM64` and `CORE_ANDROID_X64` make `apk` and `unit-tests` take core from such a directory instead of building it, e.g. `CORE_ANDROID_ARM64=./out/core-android/arm64-v8a`. CI passes the Core jobs' artifacts this way.
+
 ## The engine on the host
 
 `engine-host` is also the development loop for the engine: build it after changing `editors-engine` (incrementally) and run `eo-render` or the tests from the checkout:
