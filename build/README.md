@@ -17,7 +17,7 @@ As in DocumentServer and DesktopEditors, each repository says how it is built in
 
 | Target | What it does |
 |---|---|
-| `apk` (default) | The app with the editors; the APKs go to `build/out/` |
+| `apk` (default) | The app with the editors, as Euro-Office Documents (`euro-office-documents-*`) and Nextcloud Office (`nextcloud-office-*`); the APKs go to `build/out/` |
 | `unit-tests` | Unit tests and Android Lint of `libeditors` and `libgeditors`: reports, `gradle.log` and `result` (0 for success) in `build/out/unit-tests/` |
 | `engine-tests` | The engine tests (`editors-engine/tests`) on the host: `tests.log`, `result` and the saved files in `build/out/engine-tests/` |
 | `engine-host` | The engine on the host as an image (`ghcr.io/euro-office/editors-engine-host`, with `--load`): `eo-render` and its runtime in `/package/bin` |
@@ -40,6 +40,7 @@ docker buildx bake --allow=fs.read=.. apk                      # debug APKs in b
 docker buildx bake --allow=fs.read=.. unit-tests
 docker buildx bake --allow=fs.read=.. engine-tests
 GRADLE_TASK=:appmanager:assembleRelease docker buildx bake --allow=fs.read=.. apk   # needs the release secrets
+GRADLE_TASK=:appmanager:assembleEuroofficeDebug docker buildx bake --allow=fs.read=.. apk   # only one brand (or assembleNextcloudDebug)
 ```
 
 `DICTIONARIES_COMMIT` is needed by the targets that build the app (`apk`, `unit-tests`).
@@ -103,6 +104,8 @@ Only MobileEditors is tagged: its tag pins every submodule. To release:
 1. Set `VERSION` in a pull request and merge it.
 2. Tag the merge commit: `git tag -a v0.1.0-alpha.1 -m "Release v0.1.0-alpha.1" && git push origin v0.1.0-alpha.1`.
 3. CI builds and tests the tag. Once every job passed, the `release` job publishes a GitHub release with the `arm64-v8a` and `x86_64` APKs and their checksums, a prerelease for alpha, beta and rc versions.
+
+The release has only Euro-Office Documents: CI keeps the Nextcloud Office APKs as the run's `apk-nextcloud-office` artifact.
 
 There is no release key yet: the release has the debug APKs, each CI run signs them with a new debug key, so a release only installs over the previous one after uninstalling it.
 

@@ -187,8 +187,15 @@ jobs:
         with:
           name: apk
           path: |
-            build/out/*arm64-v8a*.apk
-            build/out/*x86_64*.apk
+            build/out/euro-office-documents-*arm64-v8a*.apk
+            build/out/euro-office-documents-*x86_64*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-nextcloud-office
+          if-no-files-found: error
+          path: |
+            build/out/nextcloud-office-*arm64-v8a*.apk
+            build/out/nextcloud-office-*x86_64*.apk
     env:
       CORE_ANDROID_ARM64: ./out/core-android/core-android-arm64
       CORE_ANDROID_X64: ./out/core-android/core-android-x64
