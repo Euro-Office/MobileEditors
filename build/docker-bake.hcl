@@ -1,5 +1,7 @@
 # docker-bake.hcl — run from the build/ directory, e.g.
 #   DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries) docker buildx bake --allow=fs.read=.. apk
+# With core prebuilt by core's CI instead of building it:
+#   export $(scripts/fetch-core.sh arm64-v8a x86_64 host)
 #
 # Each repository builds itself with its module Dockerfile (.docker/*.bake.Dockerfile); the
 # targets here wire them together with target: contexts. The build context is the checkout.
@@ -37,6 +39,20 @@ variable "VERSION_CODE" {
 # The dictionaries commit MobileEditors pins (git rev-parse HEAD:dictionaries), for the index of
 # the dictionaries the app downloads
 variable "DICTIONARIES_COMMIT" {
+  default = ""
+}
+
+# Core built earlier, instead of building it here: a directory with its lib*.so (CI's artifact, or
+# the prebuilt core that scripts/fetch-core.sh prints), for the host core's package
+variable "CORE_ANDROID_ARM64" {
+  default = ""
+}
+
+variable "CORE_ANDROID_X64" {
+  default = ""
+}
+
+variable "CORE_HOST" {
   default = ""
 }
 
@@ -97,7 +113,8 @@ target "core-android-x64" {
   }
 }
 
-# Core for the host, for the engine tests
+# Core for the host, for the engine tests: core's build image with core's
+# sources in /core and the libraries and tools in /package/bin and /tools
 target "core-host" {
   context    = ".."
   dockerfile = "./core/.docker/core.bake.Dockerfile"
@@ -105,6 +122,31 @@ target "core-host" {
   args = {
     PRODUCT    = "desktop"
     BUILD_ROOT = "/package"
+  }
+}
+
+# core-host from a prebuilt core (CORE_HOST): core's build image, core's
+# sources and the package
+target "core-base-desktop" {
+  context    = ".."
+  dockerfile = "./core/.docker/core.bake.Dockerfile"
+  target     = "core-base"
+  args = {
+    PRODUCT    = "desktop"
+    BUILD_ROOT = "/package"
+  }
+}
+
+target "core-host-prebuilt" {
+  context = ".."
+  dockerfile-inline = <<EOT
+FROM core-base
+COPY core /core
+COPY --from=core-package / /package/
+EOT
+  contexts = {
+    core-base    = "target:core-base-desktop"
+    core-package = CORE_HOST != "" ? CORE_HOST : "."
   }
 }
 
@@ -123,7 +165,7 @@ target "engine-host" {
   target     = "engine-host"
   tags       = ["${REGISTRY}/editors-engine-host:${TAG}"]
   contexts = {
-    core-host    = "target:core-host"
+    core-host    = CORE_HOST != "" ? "target:core-host-prebuilt" : "target:core-host"
     sdkjs-native = "target:sdkjs-native"
   }
 }
@@ -159,8 +201,8 @@ target "apk" {
   }
   contexts = {
     android-ndk        = "target:android-ndk"
-    core-android-arm64 = "target:core-android-arm64"
-    core-android-x64   = "target:core-android-x64"
+    core-android-arm64 = CORE_ANDROID_ARM64 != "" ? CORE_ANDROID_ARM64 : "target:core-android-arm64"
+    core-android-x64   = CORE_ANDROID_X64 != "" ? CORE_ANDROID_X64 : "target:core-android-x64"
     sdkjs-native       = "target:sdkjs-native"
     dictionaries       = "target:dictionaries"
   }

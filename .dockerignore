@@ -28,3 +28,6 @@ core/X2tConverter/build/Android/libx2t/build
 .vscode
 .idea
 **/*.swp
+
+# Prebuilt core, its own bake context
+build/core-prebuilt
