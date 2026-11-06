@@ -110,7 +110,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: build/${{ env[matrix.var] || format('out/core-android/{0}/{1}', matrix.target, matrix.abi) }}
+          path: build/${{ env[matrix.var] != '' && format('core-prebuilt/{0}', matrix.abi) || format('out/core-android/{0}/{1}', matrix.target, matrix.abi) }}
           if-no-files-found: error
           retention-days: 7
 
