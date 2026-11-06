@@ -3,3 +3,4 @@
 build/out/
 *.log
 build/work/
+build/core-prebuilt/
