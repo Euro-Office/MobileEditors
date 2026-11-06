@@ -23,7 +23,7 @@ FROM ubuntu:24.04 AS android-ndk
     # Host tools of core's third-party builds (core/Common/3dParty/build_3rdparty.py)
     RUN apt-get update && \
         apt-get install -y --no-install-recommends \
-            ca-certificates curl unzip git python3 python-is-python3 \
+            ca-certificates ccache curl unzip git python3 python-is-python3 \
             build-essential clang lld ninja-build cmake pkg-config \
             autoconf automake libtool perl patch xz-utils bzip2 file && \
         rm -rf /var/lib/apt/lists/*

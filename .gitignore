@@ -4,3 +4,4 @@ build/out/
 *.log
 build/work/
 build/core-prebuilt/
+build/ccache-seed/
