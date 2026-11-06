@@ -35,9 +35,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Without a package of the pinned core yet, wait for core's CI instead of building core
+  wait-for-core:
+    uses: ./.github/workflows/wait-for-core.yml
+    with:
+      packages: android-arm64-v8a/android android-x86_64/android linux-amd64/desktop
+
   # Core for Android per ABI, prebuilt or built here: an artifact for the apk job either way
   core-android:
     name: Core (${{ matrix.target }})
+    needs: wait-for-core
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
@@ -192,6 +199,7 @@ jobs:
 
   engine-tests:
     name: Engine and co-editing tests
+    needs: wait-for-core
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
