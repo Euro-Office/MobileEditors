@@ -173,6 +173,7 @@ jobs:
           targets: apk
           set: |
             ${{ env.CACHE }}
+            ${{ format(env.CACHE_TO, 'android-ndk', 'max') }}
             ${{ format(env.CACHE_TO, 'sdkjs-native', 'max') }}
             ${{ format(env.CACHE_TO, 'dictionaries', 'max') }}
             ${{ format(env.CACHE_TO, 'apk', 'max') }}
@@ -211,6 +212,7 @@ jobs:
       DOCUMENT_SERVER_IMAGE: ghcr.io/euro-office/documentserver:latest-dev
       DOCUMENT_SERVER_SECRET: ci-co-editing-secret
       CACHE: |
+        core-base-desktop.cache-from=type=gha,scope=core-base-desktop
         core-host.cache-from=type=gha,scope=core-host
         sdkjs-native.cache-from=type=gha,scope=sdkjs-native
         engine-host.cache-from=type=gha,scope=engine-host
@@ -233,6 +235,7 @@ jobs:
           targets: engine-tests
           set: |
             ${{ env.CACHE }}
+            ${{ format(env.CACHE_TO, 'core-base-desktop', 'max') }}
             ${{ format(env.CACHE_TO, 'core-host', 'max') }}
       - name: Engine tests' result
         working-directory: build
@@ -247,6 +250,7 @@ jobs:
           load: true
           set: |
             ${{ env.CACHE }}
+            ${{ format(env.CACHE_TO, 'core-base-desktop', 'max') }}
             ${{ format(env.CACHE_TO, 'engine-host', 'max') }}
       # Co-editing: the engine as the app runs it and a web editor (Playwright) edit the sample
       # files together, and a PDF the engine tests saved; a small storage (tools/coedit/storage.mjs)

@@ -70,7 +70,7 @@ The app's release secrets (`*.gpg`: keystore, auth strings) are not needed for d
 
 ## CI
 
-`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. The jobs run the bake targets in `docker/bake-action` with BuildKit's GitHub Actions cache, which only main writes, so a change of `core` rebuilds core for Android (hours, mostly V8) on every run of its PR. The Core jobs hand core to the APK job as artifacts. The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
+`.github/workflows/ci.yml` builds the APK and runs the engine, co-editing, unit and UI tests (see `build/README.md`). The co-editing tests run a Document Server from `ghcr.io/euro-office/documentserver:latest-dev`; while that package is private, the workflow's token needs read access to it. The jobs run the bake targets in `docker/bake-action` with BuildKit's GitHub Actions cache, which only main writes. The Core jobs take core from the packages core's CI publishes for the pinned commit (`build/scripts/fetch-core.sh`); while core's CI is still building them, `wait-for-core` holds the run back. Only without a package do they build core for Android, through a ccache kept per ABI in the Actions cache. Either way they hand core to the APK job as artifacts. The checkout needs all submodules: while repositories are private, the workflow needs a token with access to them.
 
 ## Commits
 

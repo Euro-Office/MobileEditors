@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Euro-Office contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Downloads the prebuilt core for the core checkout from the build cache, for
 # docker-bake.hcl instead of building core: arm64-v8a and x86_64 (core for
 # Android, for the apk) and host (core for Linux, for the engine tests). Prints

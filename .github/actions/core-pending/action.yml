@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Euro-Office contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
 name: Core packages pending
 description: Tells whether core's CI is still building the packages of the pinned core
 inputs:
