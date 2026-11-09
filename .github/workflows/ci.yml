@@ -2,8 +2,11 @@
 # host engine and a web editor through a Document Server), unit (JVM) and UI (emulator). Each job
 # runs build/docker-bake.hcl's targets (the repositories' module Dockerfiles) with BuildKit's
 # GitHub Actions cache, so most runs only build the editors (editors-engine, editors-android) and
-# the app; a change of core rebuilds core (hours, mostly V8). A tag v<VERSION> also publishes the
-# APKs as a GitHub release once every job passed.
+# the app. Core comes prebuilt from core's CI when it published the pinned core
+# (build/scripts/fetch-core.sh); else the Core jobs build it through ccache. The bakes run in docker/bake-action:
+# the cache needs the Actions runtime token, which only actions get, so run steps (npm and the
+# like) never see it. A tag v<VERSION> also publishes the APKs as a GitHub release once every job
+# passed.
 name: CI
 
 on:
@@ -16,19 +19,39 @@ on:
 permissions:
   contents: read
 
+env:
+  # A cache-to line for a target: format(env.CACHE_TO, target, mode). Only main writes the cache:
+  # PRs and tags can read main's, while a PR's or a tag's own cache would only push main's out
+  CACHE_TO: ${{ github.ref == 'refs/heads/main' && '{0}.cache-to=type=gha,mode={1},ignore-error=true,scope={0}' || '' }}
+  # bake-action's defaults: provenance files in the local outputs, a record artifact per bake
+  BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+  DOCKER_BUILD_SUMMARY: false
+  # Releases take only core packages built on core's main and stable branches
+  EO_CORE_CHANNELS: ${{ startsWith(github.ref, 'refs/tags/') && 'main' || '' }}
+
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Runs on main finish, so they fill the cache that PRs and tags read; tags are releases
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Core for Android per ABI, cached for the apk job (each one builds V8)
+  # Without a package of the pinned core yet, wait for core's CI instead of building core
+  wait-for-core:
+    uses: ./.github/workflows/wait-for-core.yml
+    with:
+      packages: android-arm64-v8a/android android-x86_64/android linux-amd64/desktop
+
+  # Core for Android per ABI, prebuilt or built here: an artifact for the apk job either way
   core-android:
     name: Core (${{ matrix.target }})
+    needs: wait-for-core
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
       matrix:
-        target: [core-android-arm64, core-android-x64]
+        include:
+          - { target: core-android-arm64, abi: arm64-v8a, var: CORE_ANDROID_ARM64 }
+          - { target: core-android-x64,   abi: x86_64,    var: CORE_ANDROID_X64 }
     steps:
       - name: Free disk space (the build needs about 20 GB)
         run: |
@@ -40,13 +63,77 @@ jobs:
           submodules: recursive
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      # Nothing to build when core's CI already published this core
+      - name: Prebuilt core
+        run: build/scripts/fetch-core.sh ${{ matrix.abi }} >>"$GITHUB_ENV"
+      # The runners start with an empty BuildKit cache, so ccache keeps core's objects. A seed
+      # changes the build's layer, so its result can't come from the layer cache. Unlike that
+      # cache, PRs save it too: main has core packages, so it rarely builds core, and only a run
+      # that built core gets here
+      - name: Restore ccache
+        if: env[matrix.var] == ''
+        uses: actions/cache/restore@v4
+        with:
+          path: build/ccache-seed
+          key: ccache-android-${{ matrix.abi }}-${{ github.run_id }}
+          restore-keys: ccache-android-${{ matrix.abi }}-
+      - name: ccache seed
+        if: env[matrix.var] == ''
+        run: mkdir -p build/ccache-seed
       - name: Build core
+        if: env[matrix.var] == ''
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: build
+          targets: ${{ matrix.target }}
+          set: |
+            android-ndk.cache-from=type=gha,scope=android-ndk
+            ${{ format(env.CACHE_TO, 'android-ndk', 'max') }}
+            ${{ matrix.target }}.target=core-android-ci
+            ${{ matrix.target }}.args.CORE_CCACHE=1
+            ${{ matrix.target }}.contexts.ccache-seed=./ccache-seed
+            ${{ matrix.target }}.output=type=local,dest=out/core-android/${{ matrix.target }}
+      # actions/cache only finds what was saved from the path it restores to
+      - name: ccache statistics
+        if: env[matrix.var] == ''
         working-directory: build
         run: |
-          docker buildx bake --allow=fs.read=.. ${{ matrix.target }} \
-              --set android-ndk.cache-from=type=gha,scope=android-ndk --set android-ndk.cache-to=type=gha,mode=max,scope=android-ndk \
-              --set ${{ matrix.target }}.cache-from=type=gha,scope=${{ matrix.target }} \
-              --set ${{ matrix.target }}.cache-to=type=gha,mode=max,scope=${{ matrix.target }}
+          rm -rf ccache-seed
+          mv out/core-android/${{ matrix.target }}/ccache ccache-seed
+          cat ccache-seed/last-stats.txt
+      - name: Save ccache
+        if: env[matrix.var] == '' && !startsWith(github.ref, 'refs/tags/')
+        uses: actions/cache/save@v4
+        with:
+          path: build/ccache-seed
+          key: ccache-android-${{ matrix.abi }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: build/${{ env[matrix.var] != '' && format('core-prebuilt/{0}', matrix.abi) || format('out/core-android/{0}/{1}', matrix.target, matrix.abi) }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # Every run that builds core saves its ccache under a new key, and only the newest one per ABI
+  # is restored. Deletes the others of this ref, or they push out the rest of the cache.
+  prune-ccache:
+    name: Prune ccache
+    needs: core-android
+    if: always() && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF" --key ccache-android- \
+              --sort created_at --order desc --limit 1000 --json id,key |
+            jq -r 'group_by(.key | sub("-[0-9]+$"; "")) | map(.[1:]) | flatten | .[].id' |
+            while read -r id; do
+              gh cache delete "$id" --repo "$GITHUB_REPOSITORY" || true
+            done
 
   apk:
     name: APK and unit tests
@@ -59,19 +146,37 @@ jobs:
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
       - name: Version
-        run: build/scripts/version.sh >>"$GITHUB_ENV"
+        run: |
+          build/scripts/version.sh >>"$GITHUB_ENV"
+          echo "DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)" >>"$GITHUB_ENV"
+      # Core as local contexts (CORE_ANDROID_*): with core's targets in one bake, only one ABI
+      # finds its cache and the other one is built again
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-android-*
+          path: build/out/core-android
       - name: Unit tests
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: build
+          targets: unit-tests
+          set: ${{ env.CACHE }}
+      - name: Unit tests' result
         working-directory: build
         run: |
-          export DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)
-          docker buildx bake --allow=fs.read=.. unit-tests $CACHE
           tail -30 out/unit-tests/gradle.log
           test "$(cat out/unit-tests/result)" = 0
       - name: APK
-        working-directory: build
-        run: |
-          export DICTIONARIES_COMMIT=$(git rev-parse HEAD:dictionaries)
-          docker buildx bake --allow=fs.read=.. apk $CACHE
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: build
+          targets: apk
+          set: |
+            ${{ env.CACHE }}
+            ${{ format(env.CACHE_TO, 'android-ndk', 'max') }}
+            ${{ format(env.CACHE_TO, 'sdkjs-native', 'max') }}
+            ${{ format(env.CACHE_TO, 'dictionaries', 'max') }}
+            ${{ format(env.CACHE_TO, 'apk', 'max') }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -85,21 +190,18 @@ jobs:
             build/out/*arm64-v8a*.apk
             build/out/*x86_64*.apk
     env:
-      # core from the core-android job; the app's own layers are cached for the next run
-      CACHE: >-
-        --set android-ndk.cache-from=type=gha,scope=android-ndk
-        --set core-android-arm64.cache-from=type=gha,scope=core-android-arm64
-        --set core-android-x64.cache-from=type=gha,scope=core-android-x64
-        --set sdkjs-native.cache-from=type=gha,scope=sdkjs-native
-        --set sdkjs-native.cache-to=type=gha,mode=max,scope=sdkjs-native
-        --set dictionaries.cache-from=type=gha,scope=dictionaries
-        --set dictionaries.cache-to=type=gha,mode=max,scope=dictionaries
-        --set apk.cache-from=type=gha,scope=android
-        --set apk.cache-to=type=gha,mode=max,scope=android
-        --set unit-tests.cache-from=type=gha,scope=android
+      CORE_ANDROID_ARM64: ./out/core-android/core-android-arm64
+      CORE_ANDROID_X64: ./out/core-android/core-android-x64
+      CACHE: |
+        android-ndk.cache-from=type=gha,scope=android-ndk
+        sdkjs-native.cache-from=type=gha,scope=sdkjs-native
+        dictionaries.cache-from=type=gha,scope=dictionaries
+        apk.cache-from=type=gha,scope=apk
+        unit-tests.cache-from=type=gha,scope=apk
 
   engine-tests:
     name: Engine and co-editing tests
+    needs: wait-for-core
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
@@ -109,12 +211,11 @@ jobs:
       # The Document Server for co-editing (its development image follows DocumentServer's main)
       DOCUMENT_SERVER_IMAGE: ghcr.io/euro-office/documentserver:latest-dev
       DOCUMENT_SERVER_SECRET: ci-co-editing-secret
-      CACHE: >-
-        --set core-host.cache-from=type=gha,scope=core-host
-        --set core-host.cache-to=type=gha,mode=max,scope=core-host
-        --set sdkjs-native.cache-from=type=gha,scope=sdkjs-native
-        --set engine-host.cache-from=type=gha,scope=engine-host
-        --set engine-host.cache-to=type=gha,mode=max,scope=engine-host
+      CACHE: |
+        core-base-desktop.cache-from=type=gha,scope=core-base-desktop
+        core-host.cache-from=type=gha,scope=core-host
+        sdkjs-native.cache-from=type=gha,scope=sdkjs-native
+        engine-host.cache-from=type=gha,scope=engine-host
     steps:
       - name: Free disk space (core for the host needs about 20 GB)
         run: |
@@ -125,15 +226,32 @@ jobs:
           submodules: recursive
           token: ${{ secrets.SUBMODULES_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      - name: Prebuilt core
+        run: build/scripts/fetch-core.sh host >>"$GITHUB_ENV"
       - name: Engine tests
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: build
+          targets: engine-tests
+          set: |
+            ${{ env.CACHE }}
+            ${{ format(env.CACHE_TO, 'core-base-desktop', 'max') }}
+            ${{ format(env.CACHE_TO, 'core-host', 'max') }}
+      - name: Engine tests' result
         working-directory: build
         run: |
-          docker buildx bake --allow=fs.read=.. engine-tests $CACHE
           cat out/engine-tests/tests.log
           test "$(cat out/engine-tests/result)" = 0
       - name: Engine for the co-editing tests
-        working-directory: build
-        run: docker buildx bake --allow=fs.read=.. engine-host --load $CACHE
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: build
+          targets: engine-host
+          load: true
+          set: |
+            ${{ env.CACHE }}
+            ${{ format(env.CACHE_TO, 'core-base-desktop', 'max') }}
+            ${{ format(env.CACHE_TO, 'engine-host', 'max') }}
       # Co-editing: the engine as the app runs it and a web editor (Playwright) edit the sample
       # files together, and a PDF the engine tests saved; a small storage (tools/coedit/storage.mjs)
       # stands in for Nextcloud
@@ -202,11 +320,15 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: docker/setup-buildx-action@v3
       - name: Emulator image
-        working-directory: build
-        run: |
-          docker buildx bake --allow=fs.read=.. emulator --load \
-              --set android-ndk.cache-from=type=gha,scope=android-ndk \
-              --set emulator.cache-from=type=gha,scope=emulator --set emulator.cache-to=type=gha,mode=max,scope=emulator
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: build
+          targets: emulator
+          load: true
+          set: |
+            android-ndk.cache-from=type=gha,scope=android-ndk
+            emulator.cache-from=type=gha,scope=emulator
+            ${{ format(env.CACHE_TO, 'emulator', 'max') }}
       - name: UI tests
         run: |
           docker run --rm --device /dev/kvm -v "$PWD":/src -w /src ghcr.io/euro-office/android-emulator \
