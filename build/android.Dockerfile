@@ -39,7 +39,8 @@ FROM ubuntu:24.04 AS android-ndk
 
 #### DICTIONARIES ####
 # The English dictionary, which comes with the app, and index.json: the dictionaries
-# commit, where to download the others from at that commit and each one's languages (LCIDs)
+# commit, where to download the others from at that commit, each one's languages (LCIDs)
+# and the size and SHA-256 hash of each file, which the app checks downloads against
 FROM ubuntu:24.04 AS dictionaries-build
 
     ARG DICTIONARIES_COMMIT
@@ -57,15 +58,20 @@ FROM ubuntu:24.04 AS dictionaries-build
         {
             printf '{"commit": "%s", "url": "%s", "languages": {' "${DICTIONARIES_COMMIT}" "$URL"
             first=1
+            files=""
             for dir in /dictionaries/*/; do
                 name=$(basename "$dir")
-                [ -f "$dir/$name.dic" ] && [ -f "$dir/$name.json" ] || continue
+                [ -f "$dir/$name.aff" ] && [ -f "$dir/$name.dic" ] && [ -f "$dir/$name.json" ] || continue
                 codes=$(sed 's/.*\[\(.*\)\].*/\1/' "$dir/$name.json" | tr -d ' \n\r')
                 [ $first -eq 1 ] || printf ', '
                 printf '"%s": [%s]' "$name" "$codes"
                 first=0
+                for file in "$dir/$name.aff" "$dir/$name.dic"; do
+                    files="$files${files:+, }$(printf '"%s": {"size": %s, "sha256": "%s"}' \
+                        "$(basename "$file")" "$(stat -c %s "$file")" "$(sha256sum "$file" | cut -d ' ' -f 1)")"
+                done
             done
-            printf '}}\n'
+            printf '}, "files": {%s}}\n' "$files"
         } > /out/index.json
 EOF
 
